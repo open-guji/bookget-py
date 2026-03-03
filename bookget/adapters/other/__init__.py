@@ -1,0 +1,1 @@
+# Other region adapters init

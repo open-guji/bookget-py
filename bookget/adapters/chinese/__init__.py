@@ -1,0 +1,1 @@
+# Chinese library adapters init

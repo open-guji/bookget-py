@@ -1,0 +1,1 @@
+# IIIF adapters init
