@@ -6,6 +6,13 @@ from .book import (
     Creator,
     DownloadTask,
 )
+from .manifest import (
+    DownloadManifest,
+    ManifestNode,
+    NodeStatus,
+    NodeType,
+    ResourceKind,
+)
 
 __all__ = [
     "BookMetadata",
@@ -13,5 +20,10 @@ __all__ = [
     "ResourceType",
     "Creator",
     "DownloadTask",
+    "DownloadManifest",
+    "ManifestNode",
+    "NodeStatus",
+    "NodeType",
+    "ResourceKind",
 ]
 

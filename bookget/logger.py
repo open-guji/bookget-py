@@ -15,8 +15,10 @@ def setup_logger(debug: bool = False, log_file: str = None):
     # Clear existing handlers
     logger.handlers.clear()
     
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
+    # Console handler (force UTF-8 on Windows to avoid cp1252 encoding errors)
+    stream = open(sys.stdout.fileno(), mode='w', encoding='utf-8',
+                  closefd=False, newline='') if sys.stdout.encoding != 'utf-8' else sys.stdout
+    console_handler = logging.StreamHandler(stream)
     console_handler.setLevel(level)
     console_format = logging.Formatter(
         "%(asctime)s [%(levelname)s] %(message)s",

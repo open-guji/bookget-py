@@ -13,7 +13,14 @@ Usage:
 import argparse
 import asyncio
 import json
+import sys
 from pathlib import Path
+
+# Force UTF-8 stdout/stderr on Windows (avoids cp1252 encoding errors)
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr.reconfigure(encoding='utf-8')
 
 from bookget.config import Config
 from bookget.core.resource_manager import ResourceManager
@@ -117,6 +124,111 @@ async def cmd_metadata(args, config: Config):
         await manager.close()
 
 
+async def cmd_discover(args, config: Config):
+    """Handle discover command -- Phase 1: structure discovery."""
+    manager = ResourceManager(config)
+
+    try:
+        output = Path(args.output) if args.output else None
+
+        if args.json_progress:
+            def progress_cb(event_type, message):
+                event = {"type": "discovery", "event": event_type,
+                         "message": message}
+                print(json.dumps(event, ensure_ascii=False), flush=True)
+        else:
+            progress_cb = None
+
+        manifest = await manager.discover(
+            url=args.url,
+            output_dir=output,
+            depth=args.depth,
+            index_id=getattr(args, 'index_id', ''),
+            progress_callback=progress_cb,
+        )
+
+        if args.json:
+            print(json.dumps(manifest.to_dict(), ensure_ascii=False, indent=2))
+        else:
+            progress = manifest.get_progress()
+            logger.info(f"Title: {manifest.title}")
+            logger.info(f"Nodes: {progress['total']}")
+            logger.info(f"Completed: {progress['completed']}")
+            logger.info(f"Discovery complete: {manifest.discovery_complete}")
+
+    finally:
+        await manager.close()
+
+
+async def cmd_expand(args, config: Config):
+    """Handle expand command -- expand a node in existing manifest."""
+    manager = ResourceManager(config)
+
+    try:
+        output = Path(args.output)
+
+        manifest = await manager.expand_manifest_node(
+            url=args.url,
+            output_dir=output,
+            node_id=args.node_id,
+            depth=args.depth,
+        )
+
+        if args.json:
+            print(json.dumps(manifest.to_dict(), ensure_ascii=False, indent=2))
+        else:
+            node = manifest.find_node(args.node_id)
+            if node:
+                logger.info(
+                    f"Expanded '{node.title}': "
+                    f"{len(node.children)} children")
+            else:
+                logger.warning(f"Node {args.node_id} not found")
+
+    finally:
+        await manager.close()
+
+
+async def cmd_download_incremental(args, config: Config):
+    """Handle incremental download command."""
+    manager = ResourceManager(config)
+
+    try:
+        output = Path(args.output) if args.output else None
+
+        if args.json_progress:
+            callback = json_progress_callback
+        elif not args.quiet:
+            callback = progress_bar
+        else:
+            callback = None
+
+        manifest = await manager.download_incremental(
+            url=args.url,
+            output_dir=output,
+            node_ids=args.section if hasattr(args, 'section') and args.section else None,
+            include_images=not args.no_images,
+            include_text=not args.no_text,
+            index_id=getattr(args, 'index_id', ''),
+            progress_callback=callback,
+            concurrency=getattr(args, 'concurrency', 1) or 1,
+        )
+
+        if not args.json_progress and not args.quiet:
+            print()
+
+        progress = manifest.get_progress()
+        logger.info(
+            f"Progress: {progress['completed']}/{progress['total']} "
+            f"({progress['percent']}%)")
+
+        if args.json:
+            print(json.dumps(manifest.to_dict(), ensure_ascii=False, indent=2))
+
+    finally:
+        await manager.close()
+
+
 def cmd_sites(args):
     """Handle sites command."""
     if args.check:
@@ -176,7 +288,32 @@ def main():
     p_download.add_argument("--json-progress", action="store_true", help="Output JSON progress events")
     p_download.add_argument("--index-id", type=str, help="Global index ID", default="")
     p_download.add_argument("-q", "--quiet", action="store_true", help="Quiet mode")
-    
+    p_download.add_argument("--incremental", action="store_true",
+                            help="Use manifest-based incremental download")
+    p_download.add_argument("--section", type=str, nargs="*",
+                            help="Download specific sections/nodes by ID")
+    p_download.add_argument("--concurrency", type=int, default=1,
+                            help="Number of nodes to download in parallel (default 1)")
+
+    # discover command
+    p_discover = subparsers.add_parser("discover", help="Discover book structure (Phase 1)")
+    p_discover.add_argument("url", help="Book URL")
+    p_discover.add_argument("-o", "--output", help="Output directory")
+    p_discover.add_argument("--depth", type=int, default=1,
+                            help="Discovery depth (-1 for full, 1 for top-level)")
+    p_discover.add_argument("--json", action="store_true", help="Output manifest as JSON")
+    p_discover.add_argument("--json-progress", action="store_true",
+                            help="Stream JSON discovery events")
+    p_discover.add_argument("--index-id", type=str, default="")
+
+    # expand command
+    p_expand = subparsers.add_parser("expand", help="Expand a node in existing manifest")
+    p_expand.add_argument("url", help="Book URL")
+    p_expand.add_argument("node_id", help="Node ID to expand")
+    p_expand.add_argument("-o", "--output", required=True, help="Output directory")
+    p_expand.add_argument("--depth", type=int, default=1)
+    p_expand.add_argument("--json", action="store_true")
+
     # metadata command
     p_meta = subparsers.add_parser("metadata", help="Get metadata only")
     p_meta.add_argument("url", help="Book URL")
@@ -204,7 +341,14 @@ def main():
     
     try:
         if args.command == "download":
-            asyncio.run(cmd_download(args, config))
+            if getattr(args, 'incremental', False) or getattr(args, 'section', None):
+                asyncio.run(cmd_download_incremental(args, config))
+            else:
+                asyncio.run(cmd_download(args, config))
+        elif args.command == "discover":
+            asyncio.run(cmd_discover(args, config))
+        elif args.command == "expand":
+            asyncio.run(cmd_expand(args, config))
         elif args.command == "metadata":
             asyncio.run(cmd_metadata(args, config))
         elif args.command == "sites":

@@ -10,6 +10,9 @@ from ..config import Config
 from ..models.book import BookMetadata, Resource, DownloadTask, ResourceType
 from ..adapters.registry import get_adapter, AdapterRegistry
 from ..adapters.base import BaseSiteAdapter
+from ..models.manifest import (
+    DownloadManifest, ManifestNode, NodeStatus, NodeType, ResourceKind,
+)
 from ..downloaders.base import ImageDownloader, TextDownloader
 from ..storage.file_storage import FileStorage
 from ..logger import logger
@@ -116,7 +119,12 @@ class ResourceManager:
                     logger.info(f"Text already downloaded, skipping")
                     return task
 
-                structured = await adapter.get_structured_text(book_id, index_id=index_id)
+                import inspect
+                sig = inspect.signature(adapter.get_structured_text)
+                kwargs: dict = {"index_id": index_id}
+                if "progress_callback" in sig.parameters:
+                    kwargs["progress_callback"] = progress_callback
+                structured = await adapter.get_structured_text(book_id, **kwargs)
                 if structured:
                     text_dir = dest_dir / "text"
                     text_dir.mkdir(exist_ok=True)
@@ -296,7 +304,215 @@ class ResourceManager:
     def is_url_supported(self, url: str) -> bool:
         """Check if a URL is supported."""
         return AdapterRegistry.get_for_url(url) is not None
-    
+
+    # ------------------------------------------------------------------
+    # Incremental discovery & download (new API)
+    # ------------------------------------------------------------------
+
+    MANIFEST_FILENAME = "manifest.json"
+
+    async def discover(
+        self,
+        url: str,
+        output_dir: Path = None,
+        depth: int = 1,
+        index_id: str = "",
+        progress_callback: Callable = None,
+    ) -> DownloadManifest:
+        """Phase 1: Discover book structure and create/update manifest.
+
+        If a manifest already exists with discovery_complete=True,
+        returns it as-is.
+        """
+        adapter = get_adapter(url, self.config)
+        if not adapter:
+            raise AdapterNotFoundError(url)
+
+        try:
+            book_id = adapter.extract_book_id(url)
+            dest_dir = output_dir or Path(
+                self.storage.get_book_dir(book_id))
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            manifest_path = dest_dir / self.MANIFEST_FILENAME
+
+            # Load existing manifest
+            existing = DownloadManifest.load(manifest_path)
+            if existing and existing.discovery_complete:
+                logger.info("Manifest already complete, returning cached")
+                return existing
+
+            # Discover structure via adapter
+            manifest = await adapter.discover_structure(
+                book_id, index_id=index_id, depth=depth,
+                progress_callback=progress_callback,
+            )
+
+            # Save metadata.json alongside
+            metadata = await adapter.get_metadata(book_id, index_id=index_id)
+            metadata.source_url = url
+            metadata.source_site = adapter.site_id
+            metadata_path = dest_dir / "metadata.json"
+            metadata_path.write_text(
+                json.dumps(metadata.to_dict(), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+            # Merge download statuses from old manifest
+            if existing:
+                self._merge_manifest_statuses(existing.root, manifest.root)
+
+            manifest.save(manifest_path)
+            logger.info(
+                f"Manifest saved: {manifest_path} "
+                f"({manifest.get_progress()['total']} nodes)")
+            return manifest
+
+        finally:
+            await adapter.close()
+
+    async def expand_manifest_node(
+        self,
+        url: str,
+        output_dir: Path,
+        node_id: str,
+        depth: int = 1,
+        progress_callback: Callable = None,
+    ) -> DownloadManifest:
+        """Expand a specific node in an existing manifest."""
+        adapter = get_adapter(url, self.config)
+        if not adapter:
+            raise AdapterNotFoundError(url)
+
+        try:
+            book_id = adapter.extract_book_id(url)
+            manifest_path = output_dir / self.MANIFEST_FILENAME
+            manifest = DownloadManifest.load(manifest_path)
+            if not manifest:
+                raise DownloadError(
+                    f"No manifest found at {manifest_path}. "
+                    "Run 'discover' first.")
+
+            await adapter.expand_node(
+                book_id, manifest, node_id, depth, progress_callback)
+
+            manifest.save(manifest_path)
+            return manifest
+
+        finally:
+            await adapter.close()
+
+    async def download_incremental(
+        self,
+        url: str,
+        output_dir: Path = None,
+        node_ids: List[str] = None,
+        include_images: bool = True,
+        include_text: bool = True,
+        index_id: str = "",
+        progress_callback: Callable[[int, int], None] = None,
+        concurrency: int = 1,
+    ) -> DownloadManifest:
+        """Phase 2: Download content node by node with manifest checkpointing.
+
+        If *node_ids* is given, only download those nodes (and their
+        leaf descendants).  Otherwise download all discovered-but-not-
+        completed nodes.
+
+        Args:
+            concurrency: Number of nodes to download in parallel (default 1).
+                         Set >1 for concurrent downloads.
+
+        Saves manifest after each node completes (checkpoint).
+        """
+        adapter = get_adapter(url, self.config)
+        if not adapter:
+            raise AdapterNotFoundError(url)
+
+        try:
+            book_id = adapter.extract_book_id(url)
+            dest_dir = output_dir or Path(
+                self.storage.get_book_dir(book_id))
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            manifest_path = dest_dir / self.MANIFEST_FILENAME
+
+            # Load or auto-discover manifest
+            manifest = DownloadManifest.load(manifest_path)
+            if not manifest:
+                logger.info("No manifest found, auto-discovering…")
+                manifest = await adapter.discover_structure(
+                    book_id, index_id=index_id, depth=-1)
+                manifest.save(manifest_path)
+
+            # Collect nodes to download
+            nodes = manifest.get_downloadable_nodes(node_ids)
+            if not nodes:
+                logger.info("No nodes to download")
+                return manifest
+
+            total = len(nodes)
+            completed = 0
+            lock = asyncio.Lock()
+            semaphore = asyncio.Semaphore(max(1, concurrency))
+            logger.info(f"Downloading {total} nodes (concurrency={max(1, concurrency)})…")
+
+            async def _download_one(node: ManifestNode) -> bool:
+                nonlocal completed
+                async with semaphore:
+                    try:
+                        await adapter.download_node(
+                            book_id, node, dest_dir, progress_callback=None)
+                        success = node.status == NodeStatus.COMPLETED
+                    except Exception as e:
+                        logger.error(f"Failed node {node.id}: {e}")
+                        node.status = NodeStatus.FAILED
+                        success = False
+
+                    # Checkpoint + progress under lock to avoid race
+                    async with lock:
+                        if success:
+                            completed += 1
+                        # Propagate status to ancestor (folder) nodes
+                        manifest.root.update_ancestor_status()
+                        manifest.save(manifest_path)
+                        if progress_callback:
+                            progress_callback(completed, total)
+                    return success
+
+            await asyncio.gather(*[_download_one(n) for n in nodes])
+
+            logger.info(
+                f"Download complete: {completed}/{total} "
+                f"({total - completed} failed)")
+            return manifest
+
+        finally:
+            await adapter.close()
+
+    @staticmethod
+    def _merge_manifest_statuses(
+        old_root: ManifestNode, new_root: ManifestNode,
+    ):
+        """Preserve completed/downloading statuses when re-discovering."""
+        old_map: dict[str, ManifestNode] = {}
+
+        def collect(node: ManifestNode):
+            old_map[node.id] = node
+            for c in node.children:
+                collect(c)
+        collect(old_root)
+
+        def apply(node: ManifestNode):
+            old = old_map.get(node.id)
+            if old and old.status in (
+                NodeStatus.COMPLETED, NodeStatus.DOWNLOADING,
+            ):
+                node.status = old.status
+                node.downloaded_items = old.downloaded_items
+                node.local_path = old.local_path
+            for c in node.children:
+                apply(c)
+        apply(new_root)
+
     async def close(self):
         """Close all resources."""
         await self.image_downloader.close()
