@@ -443,6 +443,15 @@ class ResourceManager:
                     book_id, index_id=index_id, depth=-1)
                 manifest.save(manifest_path)
 
+            # Expand any pending (not-yet-expanded) nodes before collecting
+            if node_ids:
+                for nid in node_ids:
+                    node = manifest.find_node(nid)
+                    if node and node.expandable:
+                        logger.info(f"Auto-expanding node {nid} ({node.title})…")
+                        await adapter.expand_node(book_id, manifest, nid, depth=-1)
+                manifest.save(manifest_path)
+
             # Collect nodes to download
             nodes = manifest.get_downloadable_nodes(node_ids)
             if not nodes:

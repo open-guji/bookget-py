@@ -290,8 +290,8 @@ def main():
     p_download.add_argument("-q", "--quiet", action="store_true", help="Quiet mode")
     p_download.add_argument("--incremental", action="store_true",
                             help="Use manifest-based incremental download")
-    p_download.add_argument("--section", type=str, nargs="*",
-                            help="Download specific sections/nodes by ID")
+    p_download.add_argument("--section", type=str, action="append", default=None,
+                            help="Download specific sections/nodes by ID (repeat for multiple)")
     p_download.add_argument("--concurrency", type=int, default=1,
                             help="Number of nodes to download in parallel (default 1)")
 
