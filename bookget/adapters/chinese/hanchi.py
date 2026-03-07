@@ -746,9 +746,9 @@ class HanchiAdapter(BaseSiteAdapter):
 
         html = await self._request(hs, action=801, node_id=node_id)
 
-        # Parse 802 (content) and 801 (expandable) links
+        # Parse 802 (content) and 801 (expandable) links, capturing checksum
         content_links = re.findall(
-            rf'{re.escape(cgi_name)}\?@\d+\^\d+\^802\^\^\^(\d+)@@\d+'
+            rf'{re.escape(cgi_name)}\?@\d+\^\d+\^802\^\^\^(\d+)@@(\d+)'
             r"[^>]*class=booktree[01][^>]*>"
             r"\s*<font\s+class=tree[^>]*>(?:<b>)?([^<]+)",
             html,
@@ -758,15 +758,22 @@ class HanchiAdapter(BaseSiteAdapter):
             html,
         ))
 
+        # Collect checksums: parent node's own checksum vs children's
+        parent_checksum = None
+        child_checksums: set[str] = set()
+
         seen = set()
-        for nid, title in content_links:
+        children_to_add: list[tuple[ManifestNode, str]] = []  # (node, checksum)
+        for nid, checksum, title in content_links:
             if nid in seen:
                 continue
             seen.add(nid)
             title = title.strip()
 
-            # Skip ancestor/self breadcrumb nodes
+            # Ancestor/self breadcrumb nodes — capture parent's own checksum
             if int(nid[0]) <= parent_depth:
+                if nid == node_id:
+                    parent_checksum = checksum
                 continue
 
             is_expandable = nid in expandable_nodes
@@ -787,10 +794,29 @@ class HanchiAdapter(BaseSiteAdapter):
                 await self._expand_hanchi_node(
                     hs, child, nid, next_depth, progress_callback)
 
-            node.children.append(child)
+            children_to_add.append((child, checksum))
+            child_checksums.add(checksum)
 
             if progress_callback:
                 progress_callback("node_discovered", title)
+
+        # If parent's checksum differs from all children, it has its own
+        # unique content — add a virtual leaf "_self" node for it.
+        if (parent_checksum
+                and children_to_add
+                and parent_checksum not in child_checksums):
+            self_leaf = ManifestNode(
+                id=f"{node.id}_self",
+                title=node.title,
+                node_type=NodeType.CHAPTER,
+                status=NodeStatus.DISCOVERED,
+                resource_kind=ResourceKind.TEXT,
+                source_data={"node_id": node.source_data.get("node_id", node.id)},
+            )
+            node.children.append(self_leaf)
+
+        for child, _ in children_to_add:
+            node.children.append(child)
 
         node.children_count = len(node.children)
         # Count text leaves
