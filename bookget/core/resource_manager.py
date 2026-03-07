@@ -362,7 +362,7 @@ class ResourceManager:
             if existing:
                 self._merge_manifest_statuses(existing.root, manifest.root)
 
-            manifest.save(manifest_path)
+            self._save_hierarchical_manifests(manifest, dest_dir)
             logger.info(
                 f"Manifest saved: {manifest_path} "
                 f"({manifest.get_progress()['total']} nodes)")
@@ -396,7 +396,7 @@ class ResourceManager:
             await adapter.expand_node(
                 book_id, manifest, node_id, depth, progress_callback)
 
-            manifest.save(manifest_path)
+            self._save_hierarchical_manifests(manifest, output_dir)
             return manifest
 
         finally:
@@ -515,7 +515,7 @@ class ResourceManager:
                 logger.info("No manifest found, auto-discovering…")
                 manifest = await adapter.discover_structure(
                     book_id, index_id=index_id, depth=-1)
-                manifest.save(manifest_path)
+                self._save_hierarchical_manifests(manifest, dest_dir)
 
             # Expand any pending (not-yet-expanded) nodes before collecting
             if node_ids:
@@ -524,7 +524,7 @@ class ResourceManager:
                     if node and node.expandable:
                         logger.info(f"Auto-expanding node {nid} ({node.title})…")
                         await adapter.expand_node(book_id, manifest, nid, depth=-1)
-                manifest.save(manifest_path)
+                self._save_hierarchical_manifests(manifest, dest_dir)
 
             # Collect nodes to download
             nodes = manifest.get_downloadable_nodes(node_ids)
@@ -560,9 +560,7 @@ class ResourceManager:
                             completed += 1
                         # Propagate status to ancestor (folder) nodes
                         manifest.root.update_ancestor_status()
-                        # Save top-level manifest (full tree, for progress tracking)
-                        manifest.save(manifest_path)
-                        # Save hierarchical per-directory manifests
+                        # Save all per-directory manifests (shallow, direct children only)
                         self._save_hierarchical_manifests(manifest, dest_dir)
                         if progress_callback:
                             progress_callback(completed, total)

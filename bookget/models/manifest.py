@@ -278,14 +278,54 @@ class DownloadManifest:
         return d
 
     @classmethod
-    def load(cls, path: Path) -> Optional[DownloadManifest]:
+    def load(cls, path: Path) -> Optional['DownloadManifest']:
         if not path.exists():
             return None
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            return cls.from_dict(data)
+            manifest = cls.from_dict(data)
+            # If this is a shallow manifest, recursively load children from subdirs
+            manifest._load_children_from_subdirs(path.parent)
+            return manifest
         except Exception:
             return None
+
+    def _load_children_from_subdirs(self, base_dir: Path):
+        """Recursively expand children that have their own subdirectory manifests.
+
+        A shallow manifest only stores direct children.  If a child node has
+        a matching subdirectory (named ``{id}_{safe_title}``), load that
+        sub-manifest and replace the child's children list with it.
+        """
+        import re as _re
+
+        def _safe(node_id: str, title: str) -> str:
+            safe_title = _re.sub(r'[<>:"/\\|?*\s]', '_', title)[:60]
+            return f"{node_id}_{safe_title}"
+
+        def walk(node: ManifestNode, node_dir: Path):
+            for child in node.children:
+                if not child.children:
+                    # Try to find a sub-manifest directory for this child
+                    child_dir = node_dir / _safe(child.id, child.title)
+                    child_manifest_path = child_dir / "manifest.json"
+                    if child_manifest_path.exists():
+                        try:
+                            sub_data = json.loads(
+                                child_manifest_path.read_text(encoding="utf-8"))
+                            sub_root = ManifestNode.from_dict(
+                                sub_data.get("structure",
+                                             {"id": child.id, "type": "section"}))
+                            child.children = sub_root.children
+                            child.children_count = len(child.children)
+                            child.expandable = False
+                        except Exception:
+                            pass
+                if child.children:
+                    child_dir = node_dir / _safe(child.id, child.title)
+                    walk(child, child_dir)
+
+        walk(self.root, base_dir)
 
     # ------------------------------------------------------------------
     # Queries
