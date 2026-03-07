@@ -138,21 +138,16 @@ class ManifestNode:
         return leaves
 
     def get_text_nodes(self) -> List['ManifestNode']:
-        """Return all nodes that carry downloadable text content.
+        """Return all leaf nodes that carry downloadable text content.
 
-        This includes leaf nodes AND non-leaf nodes that have their own
-        text content (text_count > 0 and no local_path yet), which can
-        happen when a section node in the source has both inline text and
-        child sections (e.g. Hanchi 校印明實錄序 contains text itself
-        while also having 後記 as a child).
+        Only leaf nodes (no children) are collected. Non-leaf nodes with
+        their own text_count are NOT included — their 802 page is an
+        aggregate of children, downloading children covers the content.
         """
         result: list[ManifestNode] = []
-        has_own_text = self.text_count and self.text_count > 0 and not self.local_path
         if not self.children:
             result.append(self)
         else:
-            if has_own_text:
-                result.append(self)
             for child in self.children:
                 result.extend(child.get_text_nodes())
         return result
