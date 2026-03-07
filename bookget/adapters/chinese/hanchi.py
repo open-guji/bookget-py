@@ -378,13 +378,112 @@ class HanchiAdapter(BaseSiteAdapter):
         return self._parse_content_page(html)
 
     @staticmethod
+    def _extract_pages(content: str) -> list[dict]:
+        """Parse fontstyle content into a list of page dicts.
+
+        Each page dict has the structure::
+
+            {
+                "page_number": "1",          # display number from <a name=PX>
+                "image": "https://...",       # viewpdf URL or "" if absent
+                "paragraphs": ["text", ...]
+            }
+
+        The content is split on ``<table class=page>`` boundaries.  The
+        first segment (before the first page marker) is treated as page 0
+        when it contains text, otherwise discarded.
+        """
+        # Strip collation-note spans
+        content = re.sub(
+            r'<span\s+id=q\d+[^>]*>.*?</span>',
+            '', content, flags=re.DOTALL,
+        )
+
+        # Split on page-separator tables, keeping the table HTML so we can
+        # extract the page number from each separator.
+        parts = re.split(r'(<table\s+class=page>.*?</table>)', content,
+                         flags=re.DOTALL | re.IGNORECASE)
+
+        pages: list[dict] = []
+        current_page_number = ""
+        current_image = ""
+        pending_html = parts[0]  # content before the first page marker
+
+        def _flush(html_chunk: str, page_num: str, img: str) -> None:
+            """Extract paragraphs from an html chunk and append a page."""
+            paragraphs: list[str] = []
+
+            # headings
+            for m in re.finditer(r'<h3>(.*?)</h3>', html_chunk, re.DOTALL):
+                text = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+                text = re.sub(r'[\r\n\t]+', '', text).strip()
+                if text:
+                    paragraphs.append(text)
+
+            # divs
+            for m in re.finditer(r'<div[^>]*>(.*?)</div>', html_chunk, re.DOTALL):
+                inner = m.group(1)
+                # capture viewpdf URL inside divs (second page and beyond
+                # embed the image link inside the opening div)
+                if not img:
+                    vm = re.search(
+                        r"hanji_book\?([^\s'\"]+)", inner)
+                    if vm:
+                        img = f"https://hanchi.ihp.sinica.edu.tw/mqlc/hanji_book?{vm.group(1)}"
+                text = re.sub(r'<[^>]+>', '', inner).strip()
+                text = re.sub(r'[\r\n\t]+', '', text).strip()
+                if text:
+                    paragraphs.append(text)
+
+            if paragraphs or img:
+                pages.append({
+                    "page_number": page_num,
+                    "image": img,
+                    "paragraphs": paragraphs,
+                })
+
+        i = 1
+        while i < len(parts):
+            table_html = parts[i]
+            following_html = parts[i + 1] if i + 1 < len(parts) else ""
+
+            # page number: <table ...><a name=PX></a>DISPLAY_NUM</table>
+            # the anchor tag may be self-closing or paired; the number follows it
+            pn_match = re.search(
+                r'<a\s+name=P\d+[^>]*>(?:</a>)?\s*([^\s<]+)', table_html)
+            new_page_number = pn_match.group(1).strip() if pn_match else ""
+
+            # image URL from the viewpdf link that immediately follows the table
+            # (appears before the first div on that page)
+            img_match = re.search(
+                r"<a\s+class=viewpdf[^>]*hanji_book\?([^\s'\"]+)",
+                following_html,
+            )
+            new_image = (
+                f"https://hanchi.ihp.sinica.edu.tw/mqlc/hanji_book?{img_match.group(1)}"
+                if img_match else ""
+            )
+
+            # flush the accumulated chunk under the previous page header
+            _flush(pending_html, current_page_number, current_image)
+
+            current_page_number = new_page_number
+            current_image = new_image
+            pending_html = following_html
+            i += 2
+
+        # flush the last segment
+        _flush(pending_html, current_page_number, current_image)
+        return pages
+
+    @staticmethod
     def _parse_content_page(html: str) -> Optional[dict]:
         """Extract text from a regular content page (action 802).
 
-        Returns ``{"title": str, "breadcrumb": str, "paragraphs": [str]}``
+        Returns ``{"title": str, "breadcrumb": str, "pages": [...]}``
         or *None* if the page has no extractable text.
         """
-        result: dict = {"title": "", "breadcrumb": "", "paragraphs": []}
+        result: dict = {"title": "", "breadcrumb": "", "pages": []}
 
         # Breadcrumb from  <a class=gobookmark ...>史／編年／明實錄／太祖(P.1)</a>
         bc_match = re.search(r'class=gobookmark[^>]*>([^<]+)</a>', html)
@@ -404,50 +503,23 @@ class HanchiAdapter(BaseSiteAdapter):
         if not fontstyle_match:
             return None
 
-        content = fontstyle_match.group(1)
-        # Strip collation-note spans
-        content = re.sub(
-            r'<span\s+id=q\d+[^>]*>.*?</span>',
-            '', content, flags=re.DOTALL,
-        )
-        # Remove page-number tables and image markers
-        content = re.sub(
-            r'<table\s+class=page>.*?</table>', '', content, flags=re.DOTALL)
-        content = re.sub(
-            r'<a\s+class=viewpdf[^>]*>.*?</a>', '', content, flags=re.DOTALL)
+        pages = HanchiAdapter._extract_pages(fontstyle_match.group(1))
+        if not pages:
+            return None
 
-        # Extract headings
-        for h3_match in re.finditer(r'<h3>(.*?)</h3>', content, re.DOTALL):
-            heading = re.sub(r'<[^>]+>', '', h3_match.group(1)).strip()
-            if heading:
-                result["paragraphs"].append(heading)
-
-        # Extract paragraphs
-        for div_match in re.finditer(
-            r'<div[^>]*>(.*?)</div>', content, re.DOTALL,
-        ):
-            text = re.sub(r'<[^>]+>', '', div_match.group(1)).strip()
-            text = re.sub(r'[\r\n\t]+', '', text).strip()
-            if text:
-                result["paragraphs"].append(text)
-
-        return result if result["paragraphs"] else None
+        result["pages"] = pages
+        return result
 
     @staticmethod
     def _parse_friendly_print(html: str) -> Optional[dict]:
         """Extract text from a friendly-print (action 810) page.
 
-        Returns ``{"title": str, "breadcrumb": str, "paragraphs": [str]}``
+        Returns ``{"title": str, "breadcrumb": str, "pages": [...]}``
         or *None* if the page has no extractable text.
         """
-        result: dict = {"title": "", "breadcrumb": "", "paragraphs": []}
+        result: dict = {"title": "", "breadcrumb": "", "pages": []}
 
         # Breadcrumb / chapter title.
-        # The font tag often lacks a </font> closer, so we grab text
-        # up to the next HTML tag instead:
-        #   <font style="...color:#0066CC...">
-        #   史／編年／明實錄／太祖(P.1)
-        #   </table>
         title_match = re.search(
             r'<font[^>]*color:#0066CC[^>]*>\s*([^<]+)',
             html, re.IGNORECASE,
@@ -458,14 +530,9 @@ class HanchiAdapter(BaseSiteAdapter):
                 result["breadcrumb"] = breadcrumb
                 parts = breadcrumb.split("／")
                 chapter_title = parts[-1].strip() if parts else ""
-                # Remove page marker like "(P.1)"
                 chapter_title = re.sub(r'\s*\(P\.[^)]*\)\s*$', '', chapter_title)
                 result["title"] = chapter_title
 
-        # Text content lives in <SPAN id=fontstyle> … </SPAN>.
-        # The outer SPAN uses uppercase tags while collation-note spans
-        # inside it use lowercase, so we match case-sensitively and use
-        # a greedy quantifier to skip past nested </span> tags.
         fontstyle_match = re.search(
             r'<SPAN\s+id=fontstyle[^>]*>(.*)</SPAN>',
             html, re.DOTALL,
@@ -473,37 +540,12 @@ class HanchiAdapter(BaseSiteAdapter):
         if not fontstyle_match:
             return None
 
-        content = fontstyle_match.group(1)
-        # Strip collation-note spans (hidden by default, contain editorial notes)
-        content = re.sub(
-            r'<span\s+id=q\d+[^>]*>.*?</span>',
-            '', content, flags=re.DOTALL,
-        )
+        pages = HanchiAdapter._extract_pages(fontstyle_match.group(1))
+        if not pages:
+            return None
 
-        # Remove page-number tables and image markers before extracting text
-        content = re.sub(
-            r'<table\s+class=page>.*?</table>', '', content, flags=re.DOTALL)
-        content = re.sub(
-            r'<a\s+class=viewpdf[^>]*>.*?</a>', '', content, flags=re.DOTALL)
-
-        # Extract heading (<h3> tags, may be wrapped in <b>)
-        for h3_match in re.finditer(r'<h3>(.*?)</h3>', content, re.DOTALL):
-            heading = re.sub(r'<[^>]+>', '', h3_match.group(1)).strip()
-            if heading:
-                result["paragraphs"].append(heading)
-
-        # Extract paragraphs from <div> tags
-        for div_match in re.finditer(
-            r'<div[^>]*>(.*?)</div>', content, re.DOTALL,
-        ):
-            text = re.sub(r'<[^>]+>', '', div_match.group(1)).strip()
-            # Collapse newlines/tabs left over from removed tags,
-            # but preserve meaningful whitespace within text.
-            text = re.sub(r'[\r\n\t]+', '', text).strip()
-            if text:
-                result["paragraphs"].append(text)
-
-        return result if result["paragraphs"] else None
+        result["pages"] = pages
+        return result
 
     # ------------------------------------------------------------------
     # Metadata parsing
@@ -616,7 +658,7 @@ class HanchiAdapter(BaseSiteAdapter):
                     "node_id": ch["node_id"],
                     "title": ch.get("title") or text.get("title", f"Chapter {i+1}"),
                     "breadcrumb": text.get("breadcrumb", ""),
-                    "paragraphs": text.get("paragraphs", []),
+                    "pages": text.get("pages", []),
                 })
                 logger.info(
                     f"  [{i+1}/{total}] {ch.get('title', ch['node_id'])}")
@@ -788,9 +830,10 @@ class HanchiAdapter(BaseSiteAdapter):
         source_nid = node.source_data.get("node_id", node.id)
         node.status = NodeStatus.DOWNLOADING
 
+        source_url = self._build_url(hs, 802, source_nid)
         text = await self._fetch_chapter_text(hs, source_nid)
         if text:
-            chapter_dir = Path(output_dir) / "text" / "chapters"
+            chapter_dir = Path(output_dir) / "chapters"
             chapter_dir.mkdir(parents=True, exist_ok=True)
 
             safe_title = re.sub(r'[<>:"/\\|?*]', '_', node.title)[:80]
@@ -799,9 +842,10 @@ class HanchiAdapter(BaseSiteAdapter):
 
             chapter_data = {
                 "node_id": source_nid,
+                "source_url": source_url,
                 "title": node.title or text.get("title", ""),
                 "breadcrumb": text.get("breadcrumb", ""),
-                "paragraphs": text.get("paragraphs", []),
+                "pages": text.get("pages", []),
             }
             chapter_file.write_text(
                 json.dumps(chapter_data, ensure_ascii=False, indent=2),
@@ -811,7 +855,7 @@ class HanchiAdapter(BaseSiteAdapter):
             node.status = NodeStatus.COMPLETED
             node.downloaded_items = 1
             node.total_items = 1
-            node.local_path = f"text/chapters/{filename}"
+            node.local_path = f"chapters/{filename}"
         else:
             node.status = NodeStatus.FAILED
             node.failed_items = 1

@@ -36,7 +36,16 @@ class HanchiParser(BaseTextParser):
         """
         chapters = []
         for i, ch in enumerate(chapter_data):
-            paragraphs = self._clean_paragraphs(ch.get("paragraphs", []))
+            # Support both new pages format and legacy paragraphs format
+            if "pages" in ch:
+                raw_paragraphs = [
+                    p for page in ch["pages"]
+                    for p in page.get("paragraphs", [])
+                ]
+            else:
+                raw_paragraphs = ch.get("paragraphs", [])
+
+            paragraphs = self._clean_paragraphs(raw_paragraphs)
             if not paragraphs:
                 continue
 

@@ -137,11 +137,31 @@ class ManifestNode:
             leaves.extend(child.get_leaf_nodes())
         return leaves
 
+    def get_text_nodes(self) -> List['ManifestNode']:
+        """Return all nodes that carry downloadable text content.
+
+        This includes leaf nodes AND non-leaf nodes that have their own
+        text content (text_count > 0 and no local_path yet), which can
+        happen when a section node in the source has both inline text and
+        child sections (e.g. Hanchi 校印明實錄序 contains text itself
+        while also having 後記 as a child).
+        """
+        result: list[ManifestNode] = []
+        has_own_text = self.text_count and self.text_count > 0 and not self.local_path
+        if not self.children:
+            result.append(self)
+        else:
+            if has_own_text:
+                result.append(self)
+            for child in self.children:
+                result.extend(child.get_text_nodes())
+        return result
+
     def count_by_status(self) -> Dict[str, int]:
-        """Count leaf nodes grouped by status."""
+        """Count downloadable text nodes grouped by status."""
         counts: Dict[str, int] = {}
-        for leaf in self.get_leaf_nodes():
-            counts[leaf.status] = counts.get(leaf.status, 0) + 1
+        for node in self.get_text_nodes():
+            counts[node.status] = counts.get(node.status, 0) + 1
         return counts
 
     def update_ancestor_status(self):
@@ -275,8 +295,8 @@ class DownloadManifest:
                 node = self.find_node(nid)
                 if node:
                     nodes.extend(
-                        n for n in node.get_leaf_nodes()
+                        n for n in node.get_text_nodes()
                         if n.status in downloadable)
             return nodes
-        return [n for n in self.root.get_leaf_nodes()
+        return [n for n in self.root.get_text_nodes()
                 if n.status in downloadable]
