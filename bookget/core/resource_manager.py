@@ -1,6 +1,7 @@
 # Resource Manager - Main orchestrator for downloading resources
 
 import asyncio
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Callable
@@ -401,6 +402,75 @@ class ResourceManager:
         finally:
             await adapter.close()
 
+    @staticmethod
+    def _safe_dir_name(node_id: str, title: str) -> str:
+        """Build a safe directory name from node id and title."""
+        safe_title = re.sub(r'[<>:"/\\|?*\s]', '_', title)[:60]
+        return f"{node_id}_{safe_title}"
+
+    def _build_node_path_map(
+        self, root: ManifestNode, base_dir: Path,
+    ) -> dict:
+        """Build a mapping {node_id: (node_dir, parent_node)} for all nodes.
+
+        Leaf nodes go directly in their parent directory (Method A).
+        Non-leaf nodes get their own subdirectory.
+        """
+        path_map: dict = {}  # node_id -> (directory Path, parent ManifestNode or None)
+
+        def walk(node: ManifestNode, node_dir: Path, parent: Optional[ManifestNode]):
+            path_map[node.id] = (node_dir, parent)
+            for child in node.children:
+                if child.children:
+                    # Non-leaf: gets its own subdirectory
+                    child_dir = node_dir / self._safe_dir_name(child.id, child.title)
+                else:
+                    # Leaf: goes directly in current node's directory
+                    child_dir = node_dir
+                walk(child, child_dir, node)
+
+        walk(root, base_dir, None)
+        return path_map
+
+    def _save_hierarchical_manifests(
+        self, manifest: DownloadManifest, base_dir: Path,
+    ):
+        """Save per-directory manifest.json files for all non-leaf nodes.
+
+        Each directory gets a manifest whose structure only contains the
+        direct children of that directory's node.
+        """
+        def walk(node: ManifestNode, node_dir: Path):
+            if not node.children:
+                return
+
+            # Create a manifest scoped to this node's directory
+            sub_manifest = DownloadManifest(
+                version=manifest.version,
+                book_id=manifest.book_id,
+                source_url=manifest.source_url,
+                source_site=manifest.source_site,
+                title=node.title,
+                metadata=manifest.metadata,
+                created_at=manifest.created_at,
+                updated_at=manifest.updated_at,
+            )
+            sub_manifest.root = node
+
+            manifest_path = node_dir / self.MANIFEST_FILENAME
+            node_dir.mkdir(parents=True, exist_ok=True)
+            manifest_path.write_text(
+                json.dumps(sub_manifest.to_shallow_dict(), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+            for child in node.children:
+                if child.children:
+                    child_dir = node_dir / self._safe_dir_name(child.id, child.title)
+                    walk(child, child_dir)
+
+        walk(manifest.root, base_dir)
+
     async def download_incremental(
         self,
         url: str,
@@ -417,6 +487,10 @@ class ResourceManager:
         If *node_ids* is given, only download those nodes (and their
         leaf descendants).  Otherwise download all discovered-but-not-
         completed nodes.
+
+        Files are stored hierarchically mirroring the manifest tree.
+        Each directory contains its own manifest.json (shallow, direct
+        children only) plus chapter JSON files for its leaf children.
 
         Args:
             concurrency: Number of nodes to download in parallel (default 1).
@@ -458,6 +532,9 @@ class ResourceManager:
                 logger.info("No nodes to download")
                 return manifest
 
+            # Build path map: node_id -> (directory, parent_node)
+            path_map = self._build_node_path_map(manifest.root, dest_dir)
+
             total = len(nodes)
             completed = 0
             lock = asyncio.Lock()
@@ -467,9 +544,10 @@ class ResourceManager:
             async def _download_one(node: ManifestNode) -> bool:
                 nonlocal completed
                 async with semaphore:
+                    node_dir, _ = path_map.get(node.id, (dest_dir, None))
                     try:
                         await adapter.download_node(
-                            book_id, node, dest_dir, progress_callback=None)
+                            book_id, node, node_dir, progress_callback=None)
                         success = node.status == NodeStatus.COMPLETED
                     except Exception as e:
                         logger.error(f"Failed node {node.id}: {e}")
@@ -482,7 +560,10 @@ class ResourceManager:
                             completed += 1
                         # Propagate status to ancestor (folder) nodes
                         manifest.root.update_ancestor_status()
+                        # Save top-level manifest (full tree, for progress tracking)
                         manifest.save(manifest_path)
+                        # Save hierarchical per-directory manifests
+                        self._save_hierarchical_manifests(manifest, dest_dir)
                         if progress_callback:
                             progress_callback(completed, total)
                     return success

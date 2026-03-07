@@ -250,6 +250,33 @@ class DownloadManifest:
             encoding="utf-8",
         )
 
+    def to_shallow_dict(self) -> dict:
+        """Serialize manifest with only direct children in structure (not grandchildren).
+
+        Used for per-directory manifest files in hierarchical storage.
+        Each directory manifest only describes its immediate children.
+        """
+        root_shallow = {
+            "id": self.root.id,
+            "title": self.root.title,
+            "type": self.root.node_type,
+            "status": self.root.status,
+        }
+        if self.root.source_data:
+            root_shallow["source_data"] = self.root.source_data
+        # Include only direct children, without their children
+        if self.root.children:
+            children_shallow = []
+            for child in self.root.children:
+                c = child.to_dict()
+                c.pop("children", None)  # strip grandchildren
+                children_shallow.append(c)
+            root_shallow["children"] = children_shallow
+
+        d = self.to_dict()
+        d["structure"] = root_shallow
+        return d
+
     @classmethod
     def load(cls, path: Path) -> Optional[DownloadManifest]:
         if not path.exists():

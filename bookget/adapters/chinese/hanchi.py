@@ -833,12 +833,12 @@ class HanchiAdapter(BaseSiteAdapter):
         source_url = self._build_url(hs, 802, source_nid)
         text = await self._fetch_chapter_text(hs, source_nid)
         if text:
-            chapter_dir = Path(output_dir) / "chapters"
-            chapter_dir.mkdir(parents=True, exist_ok=True)
+            dest_dir = Path(output_dir)
+            dest_dir.mkdir(parents=True, exist_ok=True)
 
             safe_title = re.sub(r'[<>:"/\\|?*]', '_', node.title)[:80]
             filename = f"{node.id}_{safe_title}.json"
-            chapter_file = chapter_dir / filename
+            chapter_file = dest_dir / filename
 
             chapter_data = {
                 "node_id": source_nid,
@@ -855,7 +855,7 @@ class HanchiAdapter(BaseSiteAdapter):
             node.status = NodeStatus.COMPLETED
             node.downloaded_items = 1
             node.total_items = 1
-            node.local_path = f"chapters/{filename}"
+            node.local_path = filename
         else:
             node.status = NodeStatus.FAILED
             node.failed_items = 1
