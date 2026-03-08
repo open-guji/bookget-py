@@ -393,10 +393,31 @@ class HanchiAdapter(BaseSiteAdapter):
         first segment (before the first page marker) is treated as page 0
         when it contains text, otherwise discarded.
         """
-        # Strip collation-note spans
+        # Convert collation-note spans into inline 【text:note】 markers,
+        # and strip the preceding <a> icon link.
         content = re.sub(
-            r'<span\s+id=q\d+[^>]*>.*?</span>',
-            '', content, flags=re.DOTALL,
+            r'<a[^>]*onclick="q\d+[^"]*"[^>]*>.*?</a>\s*', '',
+            content, flags=re.DOTALL,
+        )
+        def _convert_span(m: re.Match) -> str:
+            text = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+            # 纯图片占位符不转成内联标记（图片链接已记录在 image 字段）
+            if text == '圖':
+                return ''
+            return '【' + text + '】'
+
+        content = re.sub(
+            r'<span\s+id=q\d+[^>]*>(.*?)</span>',
+            _convert_span,
+            content, flags=re.DOTALL,
+        )
+
+        # Strip viewpdf links entirely — the URL is extracted separately
+        # via img_match; leaving the <a> tag would leak its inner text
+        # (e.g. "圖") into the paragraph content.
+        content = re.sub(
+            r'<a\s+class=viewpdf[^>]*>.*?</a>',
+            '', content, flags=re.DOTALL | re.IGNORECASE,
         )
 
         # Split on page-separator tables, keeping the table HTML so we can
@@ -758,22 +779,17 @@ class HanchiAdapter(BaseSiteAdapter):
             html,
         ))
 
-        # Collect checksums: parent node's own checksum vs children's
-        parent_checksum = None
-        child_checksums: set[str] = set()
-
         seen = set()
-        children_to_add: list[tuple[ManifestNode, str]] = []  # (node, checksum)
+        first_child_nid: Optional[str] = None
+        children_to_add: list[ManifestNode] = []
         for nid, checksum, title in content_links:
             if nid in seen:
                 continue
             seen.add(nid)
             title = title.strip()
 
-            # Ancestor/self breadcrumb nodes — capture parent's own checksum
+            # Ancestor/self breadcrumb nodes — skip
             if int(nid[0]) <= parent_depth:
-                if nid == node_id:
-                    parent_checksum = checksum
                 continue
 
             is_expandable = nid in expandable_nodes
@@ -794,28 +810,31 @@ class HanchiAdapter(BaseSiteAdapter):
                 await self._expand_hanchi_node(
                     hs, child, nid, next_depth, progress_callback)
 
-            children_to_add.append((child, checksum))
-            child_checksums.add(checksum)
+            if first_child_nid is None:
+                first_child_nid = nid
+            children_to_add.append(child)
 
             if progress_callback:
                 progress_callback("node_discovered", title)
 
-        # If parent's checksum differs from all children, it has its own
-        # unique content — add a virtual leaf "_self" node for it.
-        if (parent_checksum
-                and children_to_add
-                and parent_checksum not in child_checksums):
-            self_leaf = ManifestNode(
-                id=f"{node.id}_self",
-                title=node.title,
-                node_type=NodeType.CHAPTER,
-                status=NodeStatus.DISCOVERED,
-                resource_kind=ResourceKind.TEXT,
-                source_data={"node_id": node.source_data.get("node_id", node.id)},
-            )
-            node.children.append(self_leaf)
+        # Check whether the parent node has its own unique content by
+        # comparing actual text with the first child.  As soon as any
+        # difference is found we know the parent has independent content.
+        if children_to_add and first_child_nid:
+            has_own_content = await self._parent_has_own_content(
+                hs, node_id, first_child_nid)
+            if has_own_content:
+                self_leaf = ManifestNode(
+                    id=f"{node.id}_self",
+                    title=node.title,
+                    node_type=NodeType.CHAPTER,
+                    status=NodeStatus.DISCOVERED,
+                    resource_kind=ResourceKind.TEXT,
+                    source_data={"node_id": node.source_data.get("node_id", node.id)},
+                )
+                node.children.append(self_leaf)
 
-        for child, _ in children_to_add:
+        for child in children_to_add:
             node.children.append(child)
 
         node.children_count = len(node.children)
@@ -824,6 +843,37 @@ class HanchiAdapter(BaseSiteAdapter):
         node.text_count = sum(1 for n in leaves if n.id != node.id)
         if node.children:
             node.status = NodeStatus.DISCOVERED
+
+    async def _parent_has_own_content(
+        self, hs: HanchiSession, parent_nid: str, first_child_nid: str,
+    ) -> bool:
+        """Compare actual text of parent and first child to decide
+        whether the parent has its own unique content.
+
+        Returns True as soon as any difference in paragraph text is found.
+        """
+        parent_text = await self._fetch_chapter_text(hs, parent_nid)
+        child_text = await self._fetch_chapter_text(hs, first_child_nid)
+
+        parent_paras = self._collect_paragraphs(parent_text)
+        child_paras = self._collect_paragraphs(child_text)
+
+        if len(parent_paras) != len(child_paras):
+            return True
+        for p, c in zip(parent_paras, child_paras):
+            if p != c:
+                return True
+        return False
+
+    @staticmethod
+    def _collect_paragraphs(text_data: Optional[dict]) -> list[str]:
+        """Flatten all paragraph strings from parsed chapter text."""
+        if not text_data or not text_data.get("pages"):
+            return []
+        result: list[str] = []
+        for page in text_data["pages"]:
+            result.extend(page.get("paragraphs", []))
+        return result
 
     async def expand_node(
         self, book_id: str, manifest: DownloadManifest,
@@ -862,8 +912,8 @@ class HanchiAdapter(BaseSiteAdapter):
             dest_dir = Path(output_dir)
             dest_dir.mkdir(parents=True, exist_ok=True)
 
-            safe_title = re.sub(r'[<>:"/\\|?*]', '_', node.title)[:80]
-            filename = f"{node.id}_{safe_title}.json"
+            safe_title = re.sub(r'[<>:"/\\|?*]', '_', node.title).strip()[:80]
+            filename = f"{safe_title}.json"
             chapter_file = dest_dir / filename
 
             chapter_data = {
