@@ -198,10 +198,15 @@ async def cmd_download_incremental(args, config: Config):
 
         if args.json_progress:
             callback = json_progress_callback
+            def status_cb(event_type: str, data: dict):
+                event = {"type": "manifest_updated", "event": event_type, **data}
+                print(json.dumps(event, ensure_ascii=False), flush=True)
         elif not args.quiet:
             callback = progress_bar
+            status_cb = None
         else:
             callback = None
+            status_cb = None
 
         manifest = await manager.download_incremental(
             url=args.url,
@@ -211,6 +216,7 @@ async def cmd_download_incremental(args, config: Config):
             include_text=not args.no_text,
             index_id=getattr(args, 'index_id', ''),
             progress_callback=callback,
+            status_callback=status_cb,
             concurrency=getattr(args, 'concurrency', 1) or 1,
         )
 

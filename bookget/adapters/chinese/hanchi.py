@@ -91,6 +91,8 @@ class HanchiAdapter(BaseSiteAdapter):
     def __init__(self, config=None):
         super().__init__(config)
         self._session: Optional[aiohttp.ClientSession] = None
+        self._hanchi_sessions: dict[str, HanchiSession] = {}  # cgi_path -> cached session
+        self._session_lock = asyncio.Lock()
 
     async def get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -171,6 +173,15 @@ class HanchiAdapter(BaseSiteAdapter):
     # ------------------------------------------------------------------
     # Session management
     # ------------------------------------------------------------------
+
+    async def _get_or_spawn_session(self, cgi_path: str) -> HanchiSession:
+        """Return a cached HanchiSession, spawning a new one if needed."""
+        async with self._session_lock:
+            if cgi_path in self._hanchi_sessions:
+                return self._hanchi_sessions[cgi_path]
+            hs = await self._spawn_session(cgi_path)
+            self._hanchi_sessions[cgi_path] = hs
+            return hs
 
     async def _spawn_session(self, cgi_path: str) -> HanchiSession:
         """Initialize a new CGI session.
@@ -901,7 +912,7 @@ class HanchiAdapter(BaseSiteAdapter):
         """Download text for a single Hanchi chapter node."""
         cgi_slug, _ = self._parse_book_id(book_id)
         cgi_path = self._slug_to_cgi_path(cgi_slug)
-        hs = await self._spawn_session(cgi_path)
+        hs = await self._get_or_spawn_session(cgi_path)
 
         source_nid = node.source_data.get("node_id", node.id)
         node.status = NodeStatus.DOWNLOADING

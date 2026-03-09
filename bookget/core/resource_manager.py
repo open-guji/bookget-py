@@ -404,9 +404,9 @@ class ResourceManager:
 
     @staticmethod
     def _safe_dir_name(node_id: str, title: str) -> str:
-        """Build a safe directory name from node id and title."""
-        safe_title = re.sub(r'[<>:"/\\|?*\s]', '_', title)[:60]
-        return f"{node_id}_{safe_title}"
+        """Build a safe directory name from title only."""
+        safe_title = re.sub(r'[<>:"/\\|?*]', '_', title).strip()[:60]
+        return safe_title
 
     def _build_node_path_map(
         self, root: ManifestNode, base_dir: Path,
@@ -480,6 +480,7 @@ class ResourceManager:
         include_text: bool = True,
         index_id: str = "",
         progress_callback: Callable[[int, int], None] = None,
+        status_callback: Callable[[str, dict], None] = None,
         concurrency: int = 1,
     ) -> DownloadManifest:
         """Phase 2: Download content node by node with manifest checkpointing.
@@ -523,8 +524,19 @@ class ResourceManager:
                     node = manifest.find_node(nid)
                     if node and node.expandable:
                         logger.info(f"Auto-expanding node {nid} ({node.title})…")
+                        if status_callback:
+                            status_callback('expanding', {
+                                'node_id': nid,
+                                'title': node.title,
+                            })
                         await adapter.expand_node(book_id, manifest, nid, depth=-1)
-                self._save_hierarchical_manifests(manifest, dest_dir)
+                        # Save after each expand so progress is visible immediately
+                        self._save_hierarchical_manifests(manifest, dest_dir)
+                        if status_callback:
+                            status_callback('expanded', {
+                                'node_id': nid,
+                                'title': node.title,
+                            })
 
             # Collect nodes to download
             nodes = manifest.get_downloadable_nodes(node_ids)
@@ -545,6 +557,14 @@ class ResourceManager:
                 nonlocal completed
                 async with semaphore:
                     node_dir, _ = path_map.get(node.id, (dest_dir, None))
+                    logger.info(f"Downloading node {node.id} ({node.title})…")
+                    if status_callback:
+                        status_callback('downloading', {
+                            'node_id': node.id,
+                            'title': node.title,
+                            'completed': completed,
+                            'total': total,
+                        })
                     try:
                         await adapter.download_node(
                             book_id, node, node_dir, progress_callback=None)
@@ -564,6 +584,13 @@ class ResourceManager:
                         self._save_hierarchical_manifests(manifest, dest_dir)
                         if progress_callback:
                             progress_callback(completed, total)
+                        if status_callback:
+                            status_callback('downloaded', {
+                                'node_id': node.id,
+                                'title': node.title,
+                                'completed': completed,
+                                'total': total,
+                            })
                     return success
 
             await asyncio.gather(*[_download_one(n) for n in nodes])
