@@ -91,7 +91,7 @@ class HanchiAdapter(BaseSiteAdapter):
     def __init__(self, config=None):
         super().__init__(config)
         self._session: Optional[aiohttp.ClientSession] = None
-        self._hanchi_sessions: dict[str, HanchiSession] = {}  # cgi_path -> cached session
+        self._session_pools: dict[str, asyncio.Queue] = {}  # cgi_path -> session pool
         self._session_lock = asyncio.Lock()
 
     async def get_session(self) -> aiohttp.ClientSession:
@@ -174,14 +174,33 @@ class HanchiAdapter(BaseSiteAdapter):
     # Session management
     # ------------------------------------------------------------------
 
-    async def _get_or_spawn_session(self, cgi_path: str) -> HanchiSession:
-        """Return a cached HanchiSession, spawning a new one if needed."""
-        async with self._session_lock:
-            if cgi_path in self._hanchi_sessions:
-                return self._hanchi_sessions[cgi_path]
+    async def _acquire_session(self, cgi_path: str) -> HanchiSession:
+        """Acquire a session from the pool, creating one if pool is empty."""
+        if cgi_path not in self._session_pools:
+            self._session_pools[cgi_path] = asyncio.Queue()
+        pool = self._session_pools[cgi_path]
+        if pool.empty():
+            return await self._spawn_session(cgi_path)
+        return pool.get_nowait()
+
+    def _release_session(self, cgi_path: str, hs: HanchiSession):
+        """Return a session to the pool for reuse."""
+        if cgi_path in self._session_pools:
+            self._session_pools[cgi_path].put_nowait(hs)
+
+    async def warm_up_sessions(self, book_id: str, count: int = 1):
+        """Pre-spawn sessions sequentially to avoid server rate-limiting."""
+        cgi_slug, _ = self._parse_book_id(book_id)
+        cgi_path = self._slug_to_cgi_path(cgi_slug)
+        if cgi_path not in self._session_pools:
+            self._session_pools[cgi_path] = asyncio.Queue()
+        pool = self._session_pools[cgi_path]
+        existing = pool.qsize()
+        to_create = max(0, count - existing)
+        for i in range(to_create):
+            logger.info(f"Pre-spawning session {i+1}/{to_create}…")
             hs = await self._spawn_session(cgi_path)
-            self._hanchi_sessions[cgi_path] = hs
-            return hs
+            pool.put_nowait(hs)
 
     async def _spawn_session(self, cgi_path: str) -> HanchiSession:
         """Initialize a new CGI session.
@@ -909,16 +928,23 @@ class HanchiAdapter(BaseSiteAdapter):
         output_dir: Path,
         progress_callback: Callable[[int, int], None] = None,
     ) -> ManifestNode:
-        """Download text for a single Hanchi chapter node."""
+        """Download text for a single Hanchi chapter node.
+
+        Uses a session pool so each concurrent download gets its own
+        session (Hanchi checksums require sequential request-response).
+        Sessions are returned to the pool after use for reuse.
+        """
         cgi_slug, _ = self._parse_book_id(book_id)
         cgi_path = self._slug_to_cgi_path(cgi_slug)
-        hs = await self._get_or_spawn_session(cgi_path)
+        hs = await self._acquire_session(cgi_path)
 
         source_nid = node.source_data.get("node_id", node.id)
         node.status = NodeStatus.DOWNLOADING
 
         source_url = self._build_url(hs, 802, source_nid)
-        text = await self._fetch_chapter_text(hs, source_nid)
+        # Skip request_delay — concurrency semaphore already limits rate
+        html = await self._request(hs, action=802, node_id=source_nid)
+        text = self._parse_content_page(html)
         if text:
             dest_dir = Path(output_dir)
             dest_dir.mkdir(parents=True, exist_ok=True)
@@ -946,6 +972,9 @@ class HanchiAdapter(BaseSiteAdapter):
         else:
             node.status = NodeStatus.FAILED
             node.failed_items = 1
+
+        # Return session to pool for reuse
+        self._release_session(cgi_path, hs)
 
         if progress_callback:
             progress_callback(1, 1)

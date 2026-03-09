@@ -553,6 +553,14 @@ class ResourceManager:
             semaphore = asyncio.Semaphore(max(1, concurrency))
             logger.info(f"Downloading {total} nodes (concurrency={max(1, concurrency)})…")
 
+            # Pre-spawn sessions if adapter supports it
+            if concurrency > 1 and hasattr(adapter, 'warm_up_sessions'):
+                if status_callback:
+                    status_callback('warming_up', {
+                        'message': f'预创建 {concurrency} 个会话…',
+                    })
+                await adapter.warm_up_sessions(book_id, concurrency)
+
             async def _download_one(node: ManifestNode) -> bool:
                 nonlocal completed
                 async with semaphore:
