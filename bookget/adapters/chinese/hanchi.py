@@ -96,7 +96,19 @@ class HanchiAdapter(BaseSiteAdapter):
 
     async def get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(headers=self.get_headers())
+            timeout = aiohttp.ClientTimeout(
+                total=60,        # 总超时 60 秒
+                sock_read=30,    # 读取超时 30 秒（防止连接卡住）
+                sock_connect=15, # 连接超时 15 秒
+            )
+            connector = aiohttp.TCPConnector(
+                force_close=True,    # 每次请求后关闭连接，防止 CLOSE_WAIT 堆积
+                limit=0,             # 不限制并发连接数
+                enable_cleanup_closed=True,  # 自动清理已关闭的连接
+            )
+            self._session = aiohttp.ClientSession(
+                headers=self.get_headers(), timeout=timeout,
+                connector=connector)
         return self._session
 
     # ------------------------------------------------------------------
@@ -295,31 +307,54 @@ class HanchiAdapter(BaseSiteAdapter):
             return raw.decode("utf-8", errors="replace")
 
     async def _request(self, hs: HanchiSession, action: int,
-                       node_id: str = "", extra: str = "") -> str:
-        """Make a request with automatic session-expiry recovery.
+                       node_id: str = "", extra: str = "",
+                       max_retries: int = 3) -> str:
+        """Make a request with automatic session-expiry recovery and retry.
 
         Returns the HTML response body.
         """
-        url = self._build_url(hs, action, node_id, extra)
+        import time as _time
         session = await self.get_session()
 
-        async with session.get(url) as response:
-            html = await self._read_response(response)
-
-        # Detect session timeout (server may redirect to a SPAWN page).
-        if "@SPAWN" in html or "連線逾時" in html:
-            logger.info("Hanchi session expired, re-initializing…")
-            new = await self._spawn_session(hs.cgi_path)
-            hs.session_id = new.session_id
-            hs.checksum = new.checksum
-            hs.flag = new.flag
-
+        for attempt in range(max_retries):
             url = self._build_url(hs, action, node_id, extra)
-            async with session.get(url) as response:
-                html = await self._read_response(response)
+            try:
+                t0 = _time.monotonic()
+                async with session.get(url) as response:
+                    html = await self._read_response(response)
+                elapsed = _time.monotonic() - t0
+                logger.info(
+                    f"[sid={hs.session_id[-6:]}] "
+                    f"action={action} node={node_id} "
+                    f"status={response.status} "
+                    f"{elapsed:.2f}s {len(html)}bytes"
+                )
 
-        self._update_checksum(hs, html)
-        return html
+                # Detect session timeout (server may redirect to a SPAWN page).
+                if "@SPAWN" in html or "連線逾時" in html:
+                    logger.info("Hanchi session expired, re-initializing…")
+                    new = await self._spawn_session(hs.cgi_path)
+                    hs.session_id = new.session_id
+                    hs.checksum = new.checksum
+                    hs.flag = new.flag
+
+                    url = self._build_url(hs, action, node_id, extra)
+                    async with session.get(url) as response:
+                        html = await self._read_response(response)
+
+                self._update_checksum(hs, html)
+                return html
+
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                if attempt < max_retries - 1:
+                    wait = (attempt + 1) * 5
+                    logger.warning(
+                        f"Request failed (attempt {attempt+1}/{max_retries}): {e}, "
+                        f"retrying in {wait}s…")
+                    await asyncio.sleep(wait)
+                else:
+                    logger.error(f"Request failed after {max_retries} attempts: {e}")
+                    raise
 
     # ------------------------------------------------------------------
     # Tree traversal — discover all text-bearing nodes
@@ -934,17 +969,26 @@ class HanchiAdapter(BaseSiteAdapter):
         session (Hanchi checksums require sequential request-response).
         Sessions are returned to the pool after use for reuse.
         """
+        import time as _time
         cgi_slug, _ = self._parse_book_id(book_id)
         cgi_path = self._slug_to_cgi_path(cgi_slug)
+
+        t_acquire = _time.monotonic()
         hs = await self._acquire_session(cgi_path)
+        acquire_ms = (_time.monotonic() - t_acquire) * 1000
 
         source_nid = node.source_data.get("node_id", node.id)
         node.status = NodeStatus.DOWNLOADING
 
         source_url = self._build_url(hs, 802, source_nid)
-        # Skip request_delay — concurrency semaphore already limits rate
+        t_req = _time.monotonic()
         html = await self._request(hs, action=802, node_id=source_nid)
+        req_ms = (_time.monotonic() - t_req) * 1000
         text = self._parse_content_page(html)
+        logger.info(
+            f"[node {source_nid}] acquire={acquire_ms:.0f}ms "
+            f"request={req_ms:.0f}ms title={node.title}"
+        )
         if text:
             dest_dir = Path(output_dir)
             dest_dir.mkdir(parents=True, exist_ok=True)

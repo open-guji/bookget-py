@@ -563,7 +563,12 @@ class ResourceManager:
 
             async def _download_one(node: ManifestNode) -> bool:
                 nonlocal completed
+                import time as _time
+                t_wait = _time.monotonic()
                 async with semaphore:
+                    wait_ms = (_time.monotonic() - t_wait) * 1000
+                    if wait_ms > 100:
+                        logger.info(f"[node {node.id}] semaphore wait={wait_ms:.0f}ms")
                     node_dir, _ = path_map.get(node.id, (dest_dir, None))
                     logger.info(f"Downloading node {node.id} ({node.title})…")
                     if status_callback:
@@ -574,9 +579,16 @@ class ResourceManager:
                             'total': total,
                         })
                     try:
-                        await adapter.download_node(
-                            book_id, node, node_dir, progress_callback=None)
+                        await asyncio.wait_for(
+                            adapter.download_node(
+                                book_id, node, node_dir, progress_callback=None),
+                            timeout=120,  # 单节点最多 120 秒
+                        )
                         success = node.status == NodeStatus.COMPLETED
+                    except asyncio.TimeoutError:
+                        logger.error(f"Node {node.id} timed out after 120s")
+                        node.status = NodeStatus.FAILED
+                        success = False
                     except Exception as e:
                         logger.error(f"Failed node {node.id}: {e}")
                         node.status = NodeStatus.FAILED
