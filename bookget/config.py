@@ -54,12 +54,14 @@ class Config:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         
-        return cls(
+        kwargs = dict(
             download=DownloadConfig(**data.get("download", {})),
             storage=StorageConfig(**data.get("storage", {})),
             debug=data.get("debug", False),
-            default_headers=data.get("default_headers", cls.default_headers),
         )
+        if "default_headers" in data:
+            kwargs["default_headers"] = data["default_headers"]
+        return cls(**kwargs)
     
     @classmethod
     def from_env(cls) -> "Config":

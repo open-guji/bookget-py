@@ -553,6 +553,14 @@ class ResourceManager:
             semaphore = asyncio.Semaphore(max(1, concurrency))
             logger.info(f"Downloading {total} nodes (concurrency={max(1, concurrency)})…")
 
+            # tqdm progress bar
+            try:
+                from tqdm import tqdm
+                pbar = tqdm(total=total, unit="node", desc="Downloading",
+                            dynamic_ncols=True, leave=True)
+            except ImportError:
+                pbar = None
+
             # Pre-spawn sessions if adapter supports it
             if concurrency > 1 and hasattr(adapter, 'warm_up_sessions'):
                 if status_callback:
@@ -568,9 +576,9 @@ class ResourceManager:
                 async with semaphore:
                     wait_ms = (_time.monotonic() - t_wait) * 1000
                     if wait_ms > 100:
-                        logger.info(f"[node {node.id}] semaphore wait={wait_ms:.0f}ms")
+                        logger.debug(f"[node {node.id}] semaphore wait={wait_ms:.0f}ms")
                     node_dir, _ = path_map.get(node.id, (dest_dir, None))
-                    logger.info(f"Downloading node {node.id} ({node.title})…")
+                    logger.debug(f"Downloading node {node.id} ({node.title})…")
                     if status_callback:
                         status_callback('downloading', {
                             'node_id': node.id,
@@ -602,6 +610,8 @@ class ResourceManager:
                         manifest.root.update_ancestor_status()
                         # Save all per-directory manifests (shallow, direct children only)
                         self._save_hierarchical_manifests(manifest, dest_dir)
+                        if pbar:
+                            pbar.update(1)
                         if progress_callback:
                             progress_callback(completed, total)
                         if status_callback:
@@ -614,6 +624,9 @@ class ResourceManager:
                     return success
 
             await asyncio.gather(*[_download_one(n) for n in nodes])
+
+            if pbar:
+                pbar.close()
 
             logger.info(
                 f"Download complete: {completed}/{total} "

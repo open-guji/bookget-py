@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+from bookget.logger import logger
 
 
 class NodeStatus(str, Enum):
@@ -295,8 +296,8 @@ class DownloadManifest:
         import re as _re
 
         def _safe(node_id: str, title: str) -> str:
-            safe_title = _re.sub(r'[<>:"/\\|?*\s]', '_', title)[:60]
-            return f"{node_id}_{safe_title}"
+            safe_title = _re.sub(r'[<>:"/\\|?*]', '_', title).strip()[:60]
+            return safe_title
 
         def walk(node: ManifestNode, node_dir: Path):
             for child in node.children:
@@ -350,15 +351,22 @@ class DownloadManifest:
         If *node_ids* given, collect leaf descendants of those nodes.
         Otherwise collect all discovered/failed leaf nodes.
         """
-        downloadable = {NodeStatus.DISCOVERED, NodeStatus.FAILED}
+        downloadable = {NodeStatus.DISCOVERED, NodeStatus.FAILED, NodeStatus.DOWNLOADING}
         if node_ids:
             nodes: list[ManifestNode] = []
             for nid in node_ids:
                 node = self.find_node(nid)
-                if node:
-                    nodes.extend(
-                        n for n in node.get_text_nodes()
-                        if n.status in downloadable)
+                if not node:
+                    logger.warning(f"Section '{nid}' not found in manifest")
+                    continue
+                all_leaves = node.get_text_nodes()
+                matching = [n for n in all_leaves if n.status in downloadable]
+                logger.info(f"Section '{nid}' ({node.title}): {len(all_leaves)} leaves, {len(matching)} downloadable")
+                if not matching and all_leaves:
+                    from collections import Counter
+                    status_counts = Counter(n.status.value if isinstance(n.status, NodeStatus) else n.status for n in all_leaves)
+                    logger.info(f"  Leaf status breakdown: {dict(status_counts)}")
+                nodes.extend(matching)
             return nodes
         return [n for n in self.root.get_text_nodes()
                 if n.status in downloadable]

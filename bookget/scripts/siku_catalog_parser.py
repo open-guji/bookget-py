@@ -15,6 +15,9 @@ DYNASTIES = [
     "後周", "北齊", "北周", "南唐", "後唐", "後晉", "後漢", "遼", "金", "西夏"
 ]
 
+_RIGHT_CATEGORY_RE = re.compile(r"^右.{1,3}類")
+
+
 def _is_standalone_heading(text: str) -> bool:
     """Check if a plain-text line should be promoted to a category heading.
 
@@ -253,6 +256,8 @@ def parse_by_volume(json_path: str, output_dir: str, json_progress: bool = False
                 i += 1
                 detail_parts = []
                 comment_parts = []
+                category_summary = ""       # 右X類... 统计行
+                category_comment_parts = [] # 紧随统计行的谨按
 
                 while i < len(paragraphs):
                     next_p = paragraphs[i].strip()
@@ -260,7 +265,18 @@ def parse_by_volume(json_path: str, output_dir: str, json_progress: bool = False
                         break
 
                     cleaned = _clean_markup(next_p)
-                    if cleaned.startswith("謹案") or cleaned.startswith("案："):
+
+                    if category_summary:
+                        # 已遇到统计行，后续谨案归属统计行
+                        if cleaned.startswith("謹案") or cleaned.startswith("案："):
+                            category_comment_parts.append(cleaned)
+                        else:
+                            # 非谨案内容出现在统计行之后，停止收集
+                            break
+                    elif _RIGHT_CATEGORY_RE.match(cleaned):
+                        # 类目统计行：单独存储
+                        category_summary = cleaned
+                    elif cleaned.startswith("謹案") or cleaned.startswith("案："):
                         comment_parts.append(cleaned)
                     else:
                         detail_parts.append(cleaned)
@@ -280,6 +296,10 @@ def parse_by_volume(json_path: str, output_dir: str, json_progress: bool = False
                     "author": author,
                     "order": book_order
                 }
+                if category_summary:
+                    book_entry["category_summary"] = category_summary
+                if category_comment_parts:
+                    book_entry["category_comment"] = "\n".join(category_comment_parts)
 
                 if current_category is None:
                     # Edge case: book before any category header

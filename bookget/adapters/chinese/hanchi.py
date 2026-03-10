@@ -210,7 +210,7 @@ class HanchiAdapter(BaseSiteAdapter):
         existing = pool.qsize()
         to_create = max(0, count - existing)
         for i in range(to_create):
-            logger.info(f"Pre-spawning session {i+1}/{to_create}…")
+            logger.debug(f"Pre-spawning session {i+1}/{to_create}…")
             hs = await self._spawn_session(cgi_path)
             pool.put_nowait(hs)
 
@@ -323,7 +323,7 @@ class HanchiAdapter(BaseSiteAdapter):
                 async with session.get(url) as response:
                     html = await self._read_response(response)
                 elapsed = _time.monotonic() - t0
-                logger.info(
+                logger.debug(
                     f"[sid={hs.session_id[-6:]}] "
                     f"action={action} node={node_id} "
                     f"status={response.status} "
@@ -442,6 +442,15 @@ class HanchiAdapter(BaseSiteAdapter):
         html = await self._request(hs, action=802, node_id=node_id)
         return self._parse_content_page(html)
 
+    # Known inline editorial-mark GIF icons.
+    # These appear as <img src=.../qX.gif ...> in the text flow.
+    _KNOWN_EDITORIAL_GIFS: dict[str, str] = {
+        "qa.gif": "(補)",   # 据他本补入
+        "qd.gif": "(贅)",   # 衍文（多余字）
+        # qe.gif is handled separately (校勘注释 icon link, stripped with
+        # its wrapping <a onclick=...>)
+    }
+
     @staticmethod
     def _extract_pages(content: str) -> list[dict]:
         """Parse fontstyle content into a list of page dicts.
@@ -458,17 +467,46 @@ class HanchiAdapter(BaseSiteAdapter):
         first segment (before the first page marker) is treated as page 0
         when it contains text, otherwise discarded.
         """
-        # Convert collation-note spans into inline 【text:note】 markers,
-        # and strip the preceding <a> icon link.
+        # --- Phase 1: Convert known inline editorial GIF icons to text ---
+        # e.g. <img src=/mql/hanjishiluimg/qd.gif ...> → (贅)
+        def _convert_editorial_img(m: re.Match) -> str:
+            gif_name = m.group(1)
+            marker = HanchiAdapter._KNOWN_EDITORIAL_GIFS.get(gif_name)
+            if marker:
+                return marker
+            # qe.gif is the collation-note icon handled by the <a onclick>
+            # stripping below — it should already be inside an <a> wrapper,
+            # but tolerate a bare occurrence.
+            if gif_name == "qe.gif":
+                return ''
+            raise AdapterError(
+                f"未知的 Hanchi 校勘图标: {gif_name}，"
+                f"原始 HTML: {m.group(0)!r}")
+
+        content = re.sub(
+            r'<img\s+[^>]*?(?:src=["\']?[^"\']*?|)(\bq[a-z]\.gif)\b[^>]*>',
+            _convert_editorial_img,
+            content, flags=re.IGNORECASE,
+        )
+
+        # --- Phase 2: Convert collation-note spans to 【…】 markers ---
+        # Strip the preceding <a> icon link (qe.gif onclick trigger).
         content = re.sub(
             r'<a[^>]*onclick="q\d+[^"]*"[^>]*>.*?</a>\s*', '',
             content, flags=re.DOTALL,
         )
+
         def _convert_span(m: re.Match) -> str:
-            text = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+            inner_html = m.group(1)
+            text = re.sub(r'<[^>]+>', '', inner_html).strip()
             # 纯图片占位符不转成内联标记（图片链接已记录在 image 字段）
             if text == '圖':
                 return ''
+            # 校勘注释必须包含冒号分隔的校对内容，或以"漢籍按"开头
+            if ':' not in text and '：' not in text and '漢籍按' not in text:
+                raise AdapterError(
+                    f"未知的 Hanchi 校勘 span 内容格式: {text!r}，"
+                    f"原始 HTML: {m.group(0)!r}")
             return '【' + text + '】'
 
         content = re.sub(
@@ -485,6 +523,46 @@ class HanchiAdapter(BaseSiteAdapter):
             '', content, flags=re.DOTALL | re.IGNORECASE,
         )
 
+        # --- Phase 2b: Convert small-font text ---
+        # <font size=-2>臣</font> → 〈臣〉  (敬辞小字)
+        # <font size=-2>其他内容</font> → 【其他内容】  (校勘简注)
+        def _convert_small_font(m: re.Match) -> str:
+            text = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+            if text == '臣':
+                return '〈臣〉'
+            return '【' + text + '】'
+
+        content = re.sub(
+            r'<font\s+size\s*=\s*-?\d[^>]*>(.*?)</font>',
+            _convert_small_font,
+            content, flags=re.DOTALL | re.IGNORECASE,
+        )
+
+        # --- Phase 2c: Strip authority links (人名权威) ---
+        # <a class=auth ...>Name</a> → Name (keep text, strip link)
+        content = re.sub(
+            r'<a\s[^>]*class=auth[^>]*>(.*?)</a>',
+            r'\1', content, flags=re.DOTALL | re.IGNORECASE,
+        )
+
+        # --- Phase 3: Check for any remaining <img> tags ---
+        # All known img patterns (editorial gifs, viewpdf icons) should be
+        # handled above.  Any remaining <img> is unknown and must be flagged.
+        remaining_img = re.search(r'<img\s[^>]*>', content, re.IGNORECASE)
+        if remaining_img:
+            raise AdapterError(
+                f"未处理的 <img> 标签: {remaining_img.group(0)!r}")
+
+        # --- Phase 4: Check for any remaining <span> with id ---
+        # All q-spans should be converted above.  Flag unknown ones.
+        remaining_span = re.search(
+            r'<span\s+id=[^>]*>.*?</span>', content,
+            re.DOTALL | re.IGNORECASE)
+        if remaining_span:
+            snippet = remaining_span.group(0)[:120]
+            raise AdapterError(
+                f"未处理的 <span> 标签: {snippet!r}")
+
         # Split on page-separator tables, keeping the table HTML so we can
         # extract the page number from each separator.
         parts = re.split(r'(<table\s+class=page>.*?</table>)', content,
@@ -495,13 +573,42 @@ class HanchiAdapter(BaseSiteAdapter):
         current_image = ""
         pending_html = parts[0]  # content before the first page marker
 
+        def _strip_known_tags(text: str) -> str:
+            """Strip only known-safe HTML tags from text content.
+
+            Raises AdapterError if any unrecognized tags remain.
+            """
+            # Known structural/formatting tags that carry no textual info
+            # and can be safely removed.
+            _SAFE_TAG_RE = re.compile(
+                r'</?(?:'
+                r'a|b|i|u|em|strong|font|br|hr|sup|sub|small|big'
+                r'|nobr|wbr|center|span'
+                r')(?:\s[^>]*)?>',
+                re.IGNORECASE,
+            )
+            text = _SAFE_TAG_RE.sub('', text)
+
+            # Check for any remaining HTML tags — these are unknown
+            remaining = re.search(r'<[^>]+>', text)
+            if remaining:
+                # Show surrounding context for debugging
+                pos = remaining.start()
+                ctx_start = max(0, pos - 30)
+                ctx_end = min(len(text), pos + 80)
+                context = text[ctx_start:ctx_end]
+                raise AdapterError(
+                    f"未处理的 HTML 标签: {remaining.group(0)!r}，"
+                    f"上下文: ...{context!r}...")
+            return text
+
         def _flush(html_chunk: str, page_num: str, img: str) -> None:
             """Extract paragraphs from an html chunk and append a page."""
             paragraphs: list[str] = []
 
             # headings
             for m in re.finditer(r'<h3>(.*?)</h3>', html_chunk, re.DOTALL):
-                text = re.sub(r'<[^>]+>', '', m.group(1)).strip()
+                text = _strip_known_tags(m.group(1)).strip()
                 text = re.sub(r'[\r\n\t]+', '', text).strip()
                 if text:
                     paragraphs.append(text)
@@ -516,7 +623,7 @@ class HanchiAdapter(BaseSiteAdapter):
                         r"hanji_book\?([^\s'\"]+)", inner)
                     if vm:
                         img = f"https://hanchi.ihp.sinica.edu.tw/mqlc/hanji_book?{vm.group(1)}"
-                text = re.sub(r'<[^>]+>', '', inner).strip()
+                text = _strip_known_tags(inner).strip()
                 text = re.sub(r'[\r\n\t]+', '', text).strip()
                 if text:
                     paragraphs.append(text)
@@ -985,7 +1092,7 @@ class HanchiAdapter(BaseSiteAdapter):
         html = await self._request(hs, action=802, node_id=source_nid)
         req_ms = (_time.monotonic() - t_req) * 1000
         text = self._parse_content_page(html)
-        logger.info(
+        logger.debug(
             f"[node {source_nid}] acquire={acquire_ms:.0f}ms "
             f"request={req_ms:.0f}ms title={node.title}"
         )

@@ -2,12 +2,12 @@
 
 import json
 import pytest
-from ..text_parsers.base import StructuredText, BaseTextParser
-from ..text_parsers.ctext_parser import CTextParser
-from ..text_parsers.shidianguji_parser import ShidianGujiParser
-from ..text_parsers.wikisource_parser import WikisourceParser
-from ..text_converters.markdown_converter import MarkdownConverter
-from ..text_converters.plaintext_converter import PlainTextConverter
+from bookget.text_parsers.base import StructuredText, BaseTextParser
+from bookget.text_parsers.ctext_parser import CTextParser
+from bookget.text_parsers.shidianguji_parser import ShidianGujiParser
+from bookget.text_parsers.wikisource_parser import WikisourceParser
+from bookget.text_converters.markdown_converter import MarkdownConverter
+from bookget.text_converters.plaintext_converter import PlainTextConverter
 
 
 # --- StructuredText ---
