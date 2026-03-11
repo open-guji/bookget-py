@@ -31,6 +31,9 @@ dev = [
     "build>=1.0",
     "ruff>=0.4",
 ]
+browser = [
+    "playwright>=1.40",
+]
 
 [project.scripts]
 bookget = "bookget.main:main"

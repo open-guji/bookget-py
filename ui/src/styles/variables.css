@@ -1,0 +1,30 @@
+/* bookget-ui default theme (dark) */
+:root {
+  --bdm-bg: #1e1e1e;
+  --bdm-card-bg: #252526;
+  --bdm-card-border: #3c3c3c;
+  --bdm-text: #cccccc;
+  --bdm-text-dim: #808080;
+  --bdm-accent: #007acc;
+  --bdm-accent-fg: #ffffff;
+  --bdm-success: #4caf50;
+  --bdm-error: #d32f2f;
+  --bdm-warning: #ff9800;
+  --bdm-progress-bg: rgba(255, 255, 255, 0.1);
+  --bdm-border-radius: 4px;
+  --bdm-font-size: 13px;
+  --bdm-font-size-sm: 11px;
+  --bdm-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Light theme override */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bdm-bg: #ffffff;
+    --bdm-card-bg: #f5f5f5;
+    --bdm-card-border: #e0e0e0;
+    --bdm-text: #333333;
+    --bdm-text-dim: #666666;
+    --bdm-progress-bg: rgba(0, 0, 0, 0.08);
+  }
+}

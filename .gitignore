@@ -1,11 +1,15 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyo
+*.pyd
 *.egg-info/
 dist/
 build/
 .eggs/
 *.egg
+*.whl
+ui/node_modules/
 .venv/
 venv/
 .env
@@ -15,3 +19,6 @@ venv/
 .claude/
 CLAUDE.md
 
+ui/dist/
+ui/dist-app/
+downloads/

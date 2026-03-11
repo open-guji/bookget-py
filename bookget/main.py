@@ -274,6 +274,39 @@ def cmd_sites(args):
                     print(f"    - {domain}")
 
 
+async def cmd_serve(args, config: Config):
+    """Handle serve command — start HTTP server."""
+    from bookget.server.app import run_server
+    from pathlib import Path as _Path
+
+    # Find built frontend (dist-app/ next to this package)
+    ui_dist = _Path(__file__).parent.parent / "ui" / "dist-app"
+    static_dir = ui_dist if ui_dist.exists() else None
+    if static_dir:
+        print(f"  Serving frontend from: {static_dir}")
+    else:
+        print("  Frontend not built. Run: cd ui && npm run build:app")
+
+    runner, url = await run_server(
+        config=config,
+        host=args.host,
+        port=args.port,
+        static_dir=static_dir,
+        open_browser=not args.no_open,
+    )
+    print(f"  bookget server running at {url}")
+    print("  Press Ctrl+C to stop.\n")
+
+    try:
+        # Keep running until interrupted
+        while True:
+            await asyncio.sleep(3600)
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        pass
+    finally:
+        await runner.cleanup()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Bookget - Download ancient Chinese book resources"
@@ -331,7 +364,14 @@ def main():
     p_sites.add_argument("--list", action="store_true", help="List all sites")
     p_sites.add_argument("--check", type=str, help="Check if URL is supported")
     p_sites.add_argument("--json", action="store_true", help="Output JSON format")
-    
+
+    # serve command
+    p_serve = subparsers.add_parser("serve", help="Start HTTP server with web UI")
+    p_serve.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind (default: 127.0.0.1)")
+    p_serve.add_argument("--port", type=int, default=8765, help="Port to listen on (default: 8765)")
+    p_serve.add_argument("--no-open", action="store_true", help="Don't open browser automatically")
+    p_serve.add_argument("--output-dir", type=str, help="Default download output directory")
+
     args = parser.parse_args()
     
     if not args.command:
@@ -359,6 +399,10 @@ def main():
             asyncio.run(cmd_metadata(args, config))
         elif args.command == "sites":
             cmd_sites(args)
+        elif args.command == "serve":
+            if hasattr(args, 'output_dir') and args.output_dir:
+                config.storage.output_root = args.output_dir
+            asyncio.run(cmd_serve(args, config))
     except AdapterNotFoundError as e:
         logger.error(f"Unsupported URL: {e.url}")
         sys.exit(1)
