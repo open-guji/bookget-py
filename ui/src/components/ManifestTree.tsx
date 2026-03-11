@@ -6,6 +6,7 @@ import {
   toggleCheckRecursive,
   collectDeletableNodes,
 } from '../utils/tree-helpers';
+import { injectBookgetStyles } from '../styles/inject';
 
 // ── Props ──
 
@@ -37,6 +38,7 @@ export const ManifestTree: React.FC<ManifestTreeProps> = ({
   onCancelDownload,
   onDeleteNodes,
 }) => {
+  injectBookgetStyles();
   const [checkedNodes, setCheckedNodes] = useState<Set<string>>(new Set());
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(() => {
     const initial = new Set<string>();
