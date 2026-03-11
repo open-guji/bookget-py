@@ -519,24 +519,32 @@ class ResourceManager:
                 self._save_hierarchical_manifests(manifest, dest_dir)
 
             # Expand any pending (not-yet-expanded) nodes before collecting
+            async def _expand_subtree(node: ManifestNode):
+                """Recursively expand all expandable nodes in a subtree."""
+                if node.expandable:
+                    logger.info(f"Auto-expanding node {node.id} ({node.title})…")
+                    if status_callback:
+                        status_callback('expanding', {
+                            'node_id': node.id,
+                            'title': node.title,
+                        })
+                    await adapter.expand_node(book_id, manifest, node.id, depth=-1)
+                    self._save_hierarchical_manifests(manifest, dest_dir)
+                    if status_callback:
+                        status_callback('expanded', {
+                            'node_id': node.id,
+                            'title': node.title,
+                        })
+                # Recurse into children (even if this node wasn't expandable,
+                # its children might be — e.g. partially expanded subtrees)
+                for child in list(node.children):
+                    await _expand_subtree(child)
+
             if node_ids:
                 for nid in node_ids:
                     node = manifest.find_node(nid)
-                    if node and node.expandable:
-                        logger.info(f"Auto-expanding node {nid} ({node.title})…")
-                        if status_callback:
-                            status_callback('expanding', {
-                                'node_id': nid,
-                                'title': node.title,
-                            })
-                        await adapter.expand_node(book_id, manifest, nid, depth=-1)
-                        # Save after each expand so progress is visible immediately
-                        self._save_hierarchical_manifests(manifest, dest_dir)
-                        if status_callback:
-                            status_callback('expanded', {
-                                'node_id': nid,
-                                'title': node.title,
-                            })
+                    if node:
+                        await _expand_subtree(node)
 
             # Collect nodes to download
             nodes = manifest.get_downloadable_nodes(node_ids)

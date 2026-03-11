@@ -440,19 +440,20 @@ class HanchiAdapter(BaseSiteAdapter):
             await asyncio.sleep(delay)
 
         html = await self._request(hs, action=802, node_id=node_id)
-        return self._parse_content_page(html)
+        return self._parse_content_page(html, context=f"node_id={node_id}")
 
     # Known inline editorial-mark GIF icons.
     # These appear as <img src=.../qX.gif ...> in the text flow.
     _KNOWN_EDITORIAL_GIFS: dict[str, str] = {
         "qa.gif": "(補)",   # 据他本补入
         "qd.gif": "(贅)",   # 衍文（多余字）
-        # qe.gif is handled separately (校勘注释 icon link, stripped with
-        # its wrapping <a onclick=...>)
+        # qe.gif (校勘) and qn.gif (夾註) are annotation toggle icons,
+        # handled by the <a onclick=...> stripping below — tolerate bare
+        # occurrences by returning empty string.
     }
 
     @staticmethod
-    def _extract_pages(content: str) -> list[dict]:
+    def _extract_pages(content: str, context: str = "") -> list[dict]:
         """Parse fontstyle content into a list of page dicts.
 
         Each page dict has the structure::
@@ -474,14 +475,16 @@ class HanchiAdapter(BaseSiteAdapter):
             marker = HanchiAdapter._KNOWN_EDITORIAL_GIFS.get(gif_name)
             if marker:
                 return marker
-            # qe.gif is the collation-note icon handled by the <a onclick>
-            # stripping below — it should already be inside an <a> wrapper,
-            # but tolerate a bare occurrence.
-            if gif_name == "qe.gif":
+            # qe.gif (校勘) and qn.gif (夾註) are annotation toggle icons
+            # handled by the <a onclick> stripping below — tolerate bare
+            # occurrences.
+            if gif_name in ("qe.gif", "qn.gif"):
                 return ''
-            raise AdapterError(
+            logger.warning(
                 f"未知的 Hanchi 校勘图标: {gif_name}，"
-                f"原始 HTML: {m.group(0)!r}")
+                f"原始 HTML: {m.group(0)!r}"
+                f"{f'，context: {context}' if context else ''}")
+            return f"({gif_name})"
 
         content = re.sub(
             r'<img\s+[^>]*?(?:src=["\']?[^"\']*?|)(\bq[a-z]\.gif)\b[^>]*>',
@@ -502,11 +505,9 @@ class HanchiAdapter(BaseSiteAdapter):
             # 纯图片占位符不转成内联标记（图片链接已记录在 image 字段）
             if text == '圖':
                 return ''
-            # 校勘注释必须包含冒号分隔的校对内容，或以"漢籍按"开头
-            if ':' not in text and '：' not in text and '漢籍按' not in text:
-                raise AdapterError(
-                    f"未知的 Hanchi 校勘 span 内容格式: {text!r}，"
-                    f"原始 HTML: {m.group(0)!r}")
+            # 所有 <span id=q\d+> 都是校勘注释，直接转为内联标记
+            if not text:
+                return ''
             return '【' + text + '】'
 
         content = re.sub(
@@ -524,13 +525,10 @@ class HanchiAdapter(BaseSiteAdapter):
         )
 
         # --- Phase 2b: Convert small-font text ---
-        # <font size=-2>臣</font> → 〈臣〉  (敬辞小字)
-        # <font size=-2>其他内容</font> → 【其他内容】  (校勘简注)
+        # <font size=-2>xxx</font> → 〈xxx〉  (缩小字号的正文内容，一律转为尖角括号)
         def _convert_small_font(m: re.Match) -> str:
             text = re.sub(r'<[^>]+>', '', m.group(1)).strip()
-            if text == '臣':
-                return '〈臣〉'
-            return '【' + text + '】'
+            return '〈' + text + '〉'
 
         content = re.sub(
             r'<font\s+size\s*=\s*-?\d[^>]*>(.*?)</font>',
@@ -670,7 +668,7 @@ class HanchiAdapter(BaseSiteAdapter):
         return pages
 
     @staticmethod
-    def _parse_content_page(html: str) -> Optional[dict]:
+    def _parse_content_page(html: str, context: str = "") -> Optional[dict]:
         """Extract text from a regular content page (action 802).
 
         Returns ``{"title": str, "breadcrumb": str, "pages": [...]}``
@@ -696,7 +694,7 @@ class HanchiAdapter(BaseSiteAdapter):
         if not fontstyle_match:
             return None
 
-        pages = HanchiAdapter._extract_pages(fontstyle_match.group(1))
+        pages = HanchiAdapter._extract_pages(fontstyle_match.group(1), context=context)
         if not pages:
             return None
 
@@ -704,7 +702,7 @@ class HanchiAdapter(BaseSiteAdapter):
         return result
 
     @staticmethod
-    def _parse_friendly_print(html: str) -> Optional[dict]:
+    def _parse_friendly_print(html: str, context: str = "") -> Optional[dict]:
         """Extract text from a friendly-print (action 810) page.
 
         Returns ``{"title": str, "breadcrumb": str, "pages": [...]}``
@@ -733,7 +731,7 @@ class HanchiAdapter(BaseSiteAdapter):
         if not fontstyle_match:
             return None
 
-        pages = HanchiAdapter._extract_pages(fontstyle_match.group(1))
+        pages = HanchiAdapter._extract_pages(fontstyle_match.group(1), context=context)
         if not pages:
             return None
 
@@ -1024,8 +1022,14 @@ class HanchiAdapter(BaseSiteAdapter):
 
         Returns True as soon as any difference in paragraph text is found.
         """
-        parent_text = await self._fetch_chapter_text(hs, parent_nid)
-        child_text = await self._fetch_chapter_text(hs, first_child_nid)
+        try:
+            parent_text = await self._fetch_chapter_text(hs, parent_nid)
+            child_text = await self._fetch_chapter_text(hs, first_child_nid)
+        except Exception as e:
+            logger.warning(
+                f"比较父子内容时出错 parent={parent_nid} "
+                f"child={first_child_nid}: {e}")
+            return False
 
         parent_paras = self._collect_paragraphs(parent_text)
         child_paras = self._collect_paragraphs(child_text)
@@ -1091,7 +1095,14 @@ class HanchiAdapter(BaseSiteAdapter):
         t_req = _time.monotonic()
         html = await self._request(hs, action=802, node_id=source_nid)
         req_ms = (_time.monotonic() - t_req) * 1000
-        text = self._parse_content_page(html)
+        try:
+            text = self._parse_content_page(html, context=f"node_id={source_nid} url={source_url}")
+        except Exception as e:
+            logger.error(f"解析失败 node={source_nid} url={source_url}: {e}")
+            node.status = NodeStatus.FAILED
+            node.failed_items = 1
+            self._release_session(cgi_path, hs)
+            return node
         logger.debug(
             f"[node {source_nid}] acquire={acquire_ms:.0f}ms "
             f"request={req_ms:.0f}ms title={node.title}"
