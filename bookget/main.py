@@ -278,9 +278,15 @@ async def cmd_serve(args, config: Config):
     """Handle serve command — start HTTP server."""
     from bookget.server.app import run_server
     from pathlib import Path as _Path
+    import sys as _sys
 
-    # Find built frontend (dist-app/ next to this package)
-    ui_dist = _Path(__file__).parent.parent / "ui" / "dist-app"
+    # Locate frontend: PyInstaller bundle first, then source tree
+    if getattr(_sys, 'frozen', False):
+        # Running as PyInstaller exe — assets are in sys._MEIPASS
+        ui_dist = _Path(_sys._MEIPASS) / "ui" / "dist-app"
+    else:
+        ui_dist = _Path(__file__).parent.parent / "ui" / "dist-app"
+
     static_dir = ui_dist if ui_dist.exists() else None
     if static_dir:
         print(f"  Serving frontend from: {static_dir}")
@@ -305,6 +311,96 @@ async def cmd_serve(args, config: Config):
         pass
     finally:
         await runner.cleanup()
+
+
+async def _interactive_mode():
+    """Interactive CLI guide when launched without arguments.
+
+    When running as bookget-ui.exe (frozen, no console), auto-start serve.
+    """
+    import sys as _sys
+    # bookget-ui.exe: frozen + no console → just serve
+    if getattr(_sys, 'frozen', False) and not _sys.stdout.isatty():
+        class _FakeArgs:
+            host = "127.0.0.1"
+            port = 8765
+            no_open = False
+            output_dir = None
+        setup_logger(debug=False)
+        config = Config.from_env()
+        config.ensure_dirs()
+        await cmd_serve(_FakeArgs(), config)
+        return
+
+    print("=" * 55)
+    print("  bookget — 古籍下载工具")
+    print("=" * 55)
+    print()
+
+    # --- Step 1: URL ---
+    while True:
+        url = input("请输入书目 URL（输入 q 退出）: ").strip()
+        if url.lower() in ("q", "quit", "exit", ""):
+            print("已退出。")
+            return
+        adapter = AdapterRegistry.get_for_url(url)
+        if adapter:
+            print(f"  ✓ 已识别站点：{adapter.site_name}")
+            break
+        print("  ✗ 暂不支持该 URL，请重试。")
+
+    # --- Step 2: Output dir ---
+    default_out = str(Path.home() / "Downloads" / "bookget")
+    out_input = input(f"下载目录 [{default_out}]: ").strip()
+    output_dir = Path(out_input) if out_input else Path(default_out)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"  → 下载到：{output_dir}")
+
+    # --- Step 3: Concurrency ---
+    conc_input = input("并行数量 [3]: ").strip()
+    try:
+        concurrency = max(1, int(conc_input)) if conc_input else 3
+    except ValueError:
+        concurrency = 3
+    print(f"  → 并行数：{concurrency}")
+    print()
+
+    # --- Step 4: Discover ---
+    print("正在探索书目结构……")
+    setup_logger(debug=False)
+    config = Config.from_env()
+    config.ensure_dirs()
+    manager = ResourceManager(config)
+    try:
+        manifest = await manager.discover(url=url, output_dir=output_dir, depth=1)
+        progress = manifest.get_progress()
+        print(f"  标题：{manifest.title}")
+        print(f"  节点：{progress['total']}  已完成：{progress['completed']}")
+    finally:
+        await manager.close()
+
+    # --- Step 5: Confirm and download ---
+    confirm = input("\n开始下载所有节点？[Y/n]: ").strip().lower()
+    if confirm in ("n", "no"):
+        print("已取消。manifest 已保存，可用 `bookget download --incremental` 继续。")
+        return
+
+    print("\n开始下载……")
+    manager2 = ResourceManager(config)
+    try:
+        manifest2 = await manager2.download_incremental(
+            url=url,
+            output_dir=output_dir,
+            concurrency=concurrency,
+            progress_callback=progress_bar,
+        )
+        print()
+        p = manifest2.get_progress()
+        print(f"\n完成！{p['completed']}/{p['total']} 节点，输出目录：{output_dir}")
+    except KeyboardInterrupt:
+        print("\n已中断。下次运行可从中断处继续。")
+    finally:
+        await manager2.close()
 
 
 def main():
@@ -373,9 +469,9 @@ def main():
     p_serve.add_argument("--output-dir", type=str, help="Default download output directory")
 
     args = parser.parse_args()
-    
+
     if not args.command:
-        parser.print_help()
+        asyncio.run(_interactive_mode())
         return
     
     # Setup
