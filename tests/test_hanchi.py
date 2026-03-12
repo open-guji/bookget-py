@@ -1,7 +1,7 @@
 # Tests for Hanchi (漢籍全文資料庫) adapter and parser
 
 import pytest
-from bookget.adapters.chinese.hanchi import HanchiAdapter, _SLUG_TO_CGI, _CGI_CONFIGS
+from bookget.adapters.other.hanchi import HanchiAdapter, _SLUG_TO_CGI, _CGI_CONFIGS
 from bookget.text_parsers.hanchi_parser import HanchiParser
 from bookget.text_parsers.base import StructuredText
 from bookget.exceptions import MetadataExtractionError
@@ -170,7 +170,7 @@ class TestBuildUrl:
 
     def setup_method(self):
         self.adapter = HanchiAdapter()
-        from bookget.adapters.chinese.hanchi import HanchiSession
+        from bookget.adapters.other.hanchi import HanchiSession
         self.hs = HanchiSession(
             session_id="12345", cgi_path="/mqlc/hanjishilu",
             flag="1", checksum="99999",
@@ -469,7 +469,7 @@ class TestUpdateChecksum:
         self.adapter = HanchiAdapter()
 
     def test_updates_to_last_checksum(self):
-        from bookget.adapters.chinese.hanchi import HanchiSession
+        from bookget.adapters.other.hanchi import HanchiSession
         hs = HanchiSession(
             session_id="123", cgi_path="/mqlc/hanjishilu",
             flag="1", checksum="111",
@@ -483,7 +483,7 @@ class TestUpdateChecksum:
         assert hs.checksum == "444"
 
     def test_no_update_if_no_links(self):
-        from bookget.adapters.chinese.hanchi import HanchiSession
+        from bookget.adapters.other.hanchi import HanchiSession
         hs = HanchiSession(
             session_id="123", cgi_path="/mqlc/hanjishilu",
             flag="1", checksum="original",

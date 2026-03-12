@@ -66,7 +66,7 @@ class TestNLCGujiAdapter:
     """Tests for NLC Guji adapter."""
 
     def test_extract_book_id_metadata_param(self):
-        from bookget.adapters.chinese.nlc_guji import NLCGujiAdapter
+        from bookget.adapters.other.nlc_guji import NLCGujiAdapter
 
         adapter = NLCGujiAdapter()
         book_id = adapter.extract_book_id(
@@ -75,7 +75,7 @@ class TestNLCGujiAdapter:
         assert book_id == "0021001379780000"
 
     def test_extract_book_id_simple(self):
-        from bookget.adapters.chinese.nlc_guji import NLCGujiAdapter
+        from bookget.adapters.other.nlc_guji import NLCGujiAdapter
 
         adapter = NLCGujiAdapter()
         book_id = adapter.extract_book_id(
@@ -84,7 +84,7 @@ class TestNLCGujiAdapter:
         assert book_id == "1001254"
 
     def test_extract_book_id_invalid(self):
-        from bookget.adapters.chinese.nlc_guji import NLCGujiAdapter
+        from bookget.adapters.other.nlc_guji import NLCGujiAdapter
         from bookget.exceptions import MetadataExtractionError
 
         adapter = NLCGujiAdapter()
@@ -92,14 +92,14 @@ class TestNLCGujiAdapter:
             adapter.extract_book_id("https://guji.nlc.cn/")
 
     def test_can_handle(self):
-        from bookget.adapters.chinese.nlc_guji import NLCGujiAdapter
+        from bookget.adapters.other.nlc_guji import NLCGujiAdapter
 
         assert NLCGujiAdapter.can_handle("https://guji.nlc.cn/guji/pjkf/detail?metadataId=1011141")
         assert NLCGujiAdapter.can_handle("https://GUJI.NLC.CN/resource/resourceDetail?id=123")
         assert not NLCGujiAdapter.can_handle("https://ctext.org/analects")
 
     def test_parse_metadata(self):
-        from bookget.adapters.chinese.nlc_guji import NLCGujiAdapter
+        from bookget.adapters.other.nlc_guji import NLCGujiAdapter
 
         adapter = NLCGujiAdapter()
         data = {
@@ -153,7 +153,7 @@ class TestNLCGujiAdapter:
         assert "文嘉" in metadata.provenance[0]
 
     def test_parse_metadata_empty(self):
-        from bookget.adapters.chinese.nlc_guji import NLCGujiAdapter
+        from bookget.adapters.other.nlc_guji import NLCGujiAdapter
 
         adapter = NLCGujiAdapter()
         metadata = adapter._parse_metadata({}, "test_id")
@@ -163,7 +163,7 @@ class TestNLCGujiAdapter:
         assert metadata.source_id == "test_id"
 
     def test_make_source(self):
-        from bookget.adapters.chinese.nlc_guji import NLCGujiAdapter
+        from bookget.adapters.other.nlc_guji import NLCGujiAdapter
 
         adapter = NLCGujiAdapter()
         source = adapter._make_source("1011141")
@@ -174,7 +174,7 @@ class TestNLCGujiAdapter:
         assert "downloaded_at" in source
 
     def test_strip_html_tags(self):
-        from bookget.adapters.chinese.nlc_guji import NLCGujiAdapter
+        from bookget.adapters.other.nlc_guji import NLCGujiAdapter
 
         # Normal HTML with spans
         html = '<p><span class="chars">時</span><span class="chars">而</span><span class="punctuation" data-comma="，">，</span></p>'
@@ -231,35 +231,35 @@ class TestCTextAdapter:
     """Tests for CText adapter."""
 
     def test_extract_book_id_path(self):
-        from bookget.adapters.chinese.ctext import CTextAdapter
+        from bookget.adapters.other.ctext import CTextAdapter
 
         adapter = CTextAdapter()
         book_id = adapter.extract_book_id("https://ctext.org/analects/xue-er")
         assert book_id == "path:analects/xue-er"
 
     def test_extract_book_id_path_with_lang(self):
-        from bookget.adapters.chinese.ctext import CTextAdapter
+        from bookget.adapters.other.ctext import CTextAdapter
 
         adapter = CTextAdapter()
         book_id = adapter.extract_book_id("https://ctext.org/analects/xue-er/zh")
         assert book_id == "path:analects/xue-er"
 
     def test_extract_book_id_node(self):
-        from bookget.adapters.chinese.ctext import CTextAdapter
+        from bookget.adapters.other.ctext import CTextAdapter
 
         adapter = CTextAdapter()
         book_id = adapter.extract_book_id("https://ctext.org/text.pl?node=12345")
         assert book_id == "node:12345"
 
     def test_extract_book_id_library(self):
-        from bookget.adapters.chinese.ctext import CTextAdapter
+        from bookget.adapters.other.ctext import CTextAdapter
 
         adapter = CTextAdapter()
         book_id = adapter.extract_book_id("https://ctext.org/library.pl?if=zh&file=147636&page=1")
         assert book_id == "library:147636"
 
     def test_extract_book_id_wiki_book(self):
-        from bookget.adapters.chinese.ctext import CTextAdapter
+        from bookget.adapters.other.ctext import CTextAdapter
 
         adapter = CTextAdapter()
         book_id = adapter.extract_book_id(
@@ -267,7 +267,7 @@ class TestCTextAdapter:
         assert book_id == "wiki-book:1347940"
 
     def test_extract_book_id_wiki_chapter(self):
-        from bookget.adapters.chinese.ctext import CTextAdapter
+        from bookget.adapters.other.ctext import CTextAdapter
 
         adapter = CTextAdapter()
         book_id = adapter.extract_book_id(
@@ -276,7 +276,7 @@ class TestCTextAdapter:
 
     @pytest.mark.asyncio
     async def test_get_text_content(self):
-        from bookget.adapters.chinese.ctext import CTextAdapter
+        from bookget.adapters.other.ctext import CTextAdapter
 
         adapter = CTextAdapter()
         try:
@@ -293,7 +293,7 @@ class TestCTextAdapter:
 
     @pytest.mark.asyncio
     async def test_get_metadata(self):
-        from bookget.adapters.chinese.ctext import CTextAdapter
+        from bookget.adapters.other.ctext import CTextAdapter
 
         adapter = CTextAdapter()
         try:
@@ -308,7 +308,7 @@ class TestCTextAdapter:
 
     @pytest.mark.asyncio
     async def test_get_library_images(self):
-        from bookget.adapters.chinese.ctext import CTextAdapter
+        from bookget.adapters.other.ctext import CTextAdapter
 
         adapter = CTextAdapter()
         try:

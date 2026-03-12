@@ -16,7 +16,7 @@ a = Analysis(
     hiddenimports=[
         'bookget.adapters',
         'bookget.adapters.registry',
-        'bookget.adapters.chinese',
+        'bookget.adapters.other',
         'bookget.adapters.iiif',
         'bookget.core',
         'bookget.models',

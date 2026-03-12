@@ -89,13 +89,12 @@ class AdapterRegistry:
         
         Looks for adapter classes in:
         - adapters/iiif/
-        - adapters/chinese/
         - adapters/other/
         """
         adapters_path = Path(__file__).parent
         
         # Discover in subdirectories
-        for subdir in ["iiif", "chinese", "other"]:
+        for subdir in ["iiif", "other"]:
             subdir_path = adapters_path / subdir
             if subdir_path.exists():
                 cls._import_from_directory(subdir_path, f"bookget.adapters.{subdir}")
