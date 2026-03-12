@@ -74,7 +74,13 @@ class ShidianGujiAdapter(BaseSiteAdapter):
     async def _launch_browser(self):
         """Start Playwright, launch Chromium, return (pw, browser, context)."""
         pw = await async_playwright().start()
-        browser = await pw.chromium.launch(headless=True)
+        try:
+            browser = await pw.chromium.launch(headless=True)
+        except Exception as e:
+            await pw.stop()
+            raise DownloadError(
+                "Chromium 浏览器未安装。请运行: playwright install chromium"
+            ) from e
         context = await browser.new_context(
             user_agent=self._USER_AGENT,
             viewport={"width": 1280, "height": 900},

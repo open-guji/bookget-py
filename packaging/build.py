@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-Build script for bookget exe packages.
+Build script for bookget executable packages.
+
+Supports Windows and macOS.
 
 Usage:
     python packaging/build.py          # build both
-    python packaging/build.py cli      # bookget-cli.exe only
-    python packaging/build.py ui       # bookget-ui.exe only (builds frontend first)
+    python packaging/build.py cli      # bookget-cli only
+    python packaging/build.py ui       # bookget-ui only (builds frontend first)
 """
 import subprocess
 import sys
@@ -15,11 +17,13 @@ ROOT = Path(__file__).parent.parent
 PACKAGING = ROOT / "packaging"
 DIST = ROOT / "dist"
 
+IS_WIN = sys.platform == "win32"
+EXE_SUFFIX = ".exe" if IS_WIN else ""
+
 
 def run(cmd: list[str], cwd: Path = ROOT) -> None:
     print(f"\n$ {' '.join(str(c) for c in cmd)}")
-    # On Windows, npm is npm.cmd; use shell=True for portability
-    result = subprocess.run(cmd, cwd=cwd, shell=(sys.platform == "win32"))
+    result = subprocess.run(cmd, cwd=cwd, shell=IS_WIN)
     if result.returncode != 0:
         sys.exit(result.returncode)
 
@@ -35,7 +39,8 @@ def build_frontend() -> None:
 
 
 def build_cli() -> None:
-    print("\n-- Building bookget-cli.exe --")
+    name = f"bookget-cli{EXE_SUFFIX}"
+    print(f"\n-- Building {name} --")
     run([
         sys.executable, "-m", "PyInstaller",
         "--distpath", str(DIST),
@@ -43,11 +48,12 @@ def build_cli() -> None:
         "--noconfirm",
         str(PACKAGING / "cli.spec"),
     ])
-    print(f"  Output: {DIST / 'bookget-cli.exe'}")
+    print(f"  Output: {DIST / name}")
 
 
 def build_ui() -> None:
-    print("\n-- Building bookget-ui.exe --")
+    name = f"bookget-ui{EXE_SUFFIX}"
+    print(f"\n-- Building {name} --")
     build_frontend()
     run([
         sys.executable, "-m", "PyInstaller",
@@ -56,7 +62,7 @@ def build_ui() -> None:
         "--noconfirm",
         str(PACKAGING / "ui.spec"),
     ])
-    print(f"  Output: {DIST / 'bookget-ui.exe'}")
+    print(f"  Output: {DIST / name}")
 
 
 def main() -> None:
@@ -69,9 +75,10 @@ def main() -> None:
         build_ui()
 
     print("\nDone.")
-    for exe in DIST.glob("bookget*.exe"):
-        size_mb = exe.stat().st_size / 1024 / 1024
-        print(f"  {exe.name}  ({size_mb:.1f} MB)")
+    for f in sorted(DIST.glob("bookget*")):
+        if f.suffix in ("", ".exe"):
+            size_mb = f.stat().st_size / 1024 / 1024
+            print(f"  {f.name}  ({size_mb:.1f} MB)")
 
 
 if __name__ == "__main__":

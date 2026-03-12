@@ -17,9 +17,10 @@ import sys
 from pathlib import Path
 
 # Force UTF-8 stdout/stderr on Windows (avoids cp1252 encoding errors)
-if sys.stdout.encoding != 'utf-8':
+# In windowed mode (PyInstaller console=False), stdout/stderr may be None
+if sys.stdout and sys.stdout.encoding != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
-if sys.stderr.encoding != 'utf-8':
+if sys.stderr and sys.stderr.encoding != 'utf-8':
     sys.stderr.reconfigure(encoding='utf-8')
 
 from bookget.config import Config
@@ -320,7 +321,7 @@ async def _interactive_mode():
     """
     import sys as _sys
     # bookget-ui.exe: frozen + no console → just serve
-    if getattr(_sys, 'frozen', False) and not _sys.stdout.isatty():
+    if getattr(_sys, 'frozen', False) and (not _sys.stdout or not _sys.stdout.isatty()):
         class _FakeArgs:
             host = "127.0.0.1"
             port = 8765
@@ -337,70 +338,82 @@ async def _interactive_mode():
     print("=" * 55)
     print()
 
-    # --- Step 1: URL ---
-    while True:
-        url = input("请输入书目 URL（输入 q 退出）: ").strip()
-        if url.lower() in ("q", "quit", "exit", ""):
-            print("已退出。")
-            return
-        adapter = AdapterRegistry.get_for_url(url)
-        if adapter:
-            print(f"  ✓ 已识别站点：{adapter.site_name}")
-            break
-        print("  ✗ 暂不支持该 URL，请重试。")
-
-    # --- Step 2: Output dir ---
-    default_out = str(Path.home() / "Downloads" / "bookget")
-    out_input = input(f"下载目录 [{default_out}]: ").strip()
-    output_dir = Path(out_input) if out_input else Path(default_out)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"  → 下载到：{output_dir}")
-
-    # --- Step 3: Concurrency ---
-    conc_input = input("并行数量 [3]: ").strip()
-    try:
-        concurrency = max(1, int(conc_input)) if conc_input else 3
-    except ValueError:
-        concurrency = 3
-    print(f"  → 并行数：{concurrency}")
-    print()
-
-    # --- Step 4: Discover ---
-    print("正在探索书目结构……")
     setup_logger(debug=False)
     config = Config.from_env()
     config.ensure_dirs()
-    manager = ResourceManager(config)
-    try:
-        manifest = await manager.discover(url=url, output_dir=output_dir, depth=1)
-        progress = manifest.get_progress()
-        print(f"  标题：{manifest.title}")
-        print(f"  节点：{progress['total']}  已完成：{progress['completed']}")
-    finally:
-        await manager.close()
 
-    # --- Step 5: Confirm and download ---
-    confirm = input("\n开始下载所有节点？[Y/n]: ").strip().lower()
-    if confirm in ("n", "no"):
-        print("已取消。manifest 已保存，可用 `bookget download --incremental` 继续。")
-        return
+    while True:
+        try:
+            # --- Step 1: URL ---
+            while True:
+                url = input("请输入书目 URL（输入 q 退出）: ").strip()
+                if url.lower() in ("q", "quit", "exit", ""):
+                    print("已退出。")
+                    return
+                adapter = AdapterRegistry.get_for_url(url)
+                if adapter:
+                    print(f"  ✓ 已识别站点：{adapter.site_name}")
+                    break
+                print("  ✗ 暂不支持该 URL，请重试。")
 
-    print("\n开始下载……")
-    manager2 = ResourceManager(config)
-    try:
-        manifest2 = await manager2.download_incremental(
-            url=url,
-            output_dir=output_dir,
-            concurrency=concurrency,
-            progress_callback=progress_bar,
-        )
-        print()
-        p = manifest2.get_progress()
-        print(f"\n完成！{p['completed']}/{p['total']} 节点，输出目录：{output_dir}")
-    except KeyboardInterrupt:
-        print("\n已中断。下次运行可从中断处继续。")
-    finally:
-        await manager2.close()
+            # --- Step 2: Output dir ---
+            default_out = str(Path.home() / "Downloads" / "bookget")
+            out_input = input(f"下载目录 [{default_out}]: ").strip()
+            output_dir = Path(out_input) if out_input else Path(default_out)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            print(f"  → 下载到：{output_dir}")
+
+            # --- Step 3: Concurrency ---
+            conc_input = input("并行数量 [3]: ").strip()
+            try:
+                concurrency = max(1, int(conc_input)) if conc_input else 3
+            except ValueError:
+                concurrency = 3
+            print(f"  → 并行数：{concurrency}")
+            print()
+
+            # --- Step 4: Discover ---
+            print("正在探索书目结构……")
+            manager = ResourceManager(config)
+            try:
+                manifest = await manager.discover(url=url, output_dir=output_dir, depth=1)
+                progress = manifest.get_progress()
+                print(f"  标题：{manifest.title}")
+                print(f"  节点：{progress['total']}  已完成：{progress['completed']}")
+            finally:
+                await manager.close()
+
+            # --- Step 5: Confirm and download ---
+            confirm = input("\n开始下载所有节点？[Y/n]: ").strip().lower()
+            if confirm in ("n", "no"):
+                print("已取消。manifest 已保存，可用 `bookget download --incremental` 继续。\n")
+                continue
+
+            print("\n开始下载……")
+            manager2 = ResourceManager(config)
+            try:
+                manifest2 = await manager2.download_incremental(
+                    url=url,
+                    output_dir=output_dir,
+                    concurrency=concurrency,
+                    progress_callback=progress_bar,
+                )
+                print()
+                p = manifest2.get_progress()
+                print(f"\n完成！{p['completed']}/{p['total']} 节点，输出目录：{output_dir}\n")
+            except KeyboardInterrupt:
+                print("\n已中断。下次运行可从中断处继续。\n")
+            finally:
+                await manager2.close()
+
+        except KeyboardInterrupt:
+            print("\n已退出。")
+            return
+        except EOFError:
+            return
+        except Exception as e:
+            print(f"\n错误：{e}\n")
+            continue
 
 
 def main():
@@ -473,14 +486,14 @@ def main():
     if not args.command:
         asyncio.run(_interactive_mode())
         return
-    
+
     # Setup
     setup_logger(debug=args.debug)
     config = Config.from_file(Path(args.config)) if args.config else Config.from_env()
     if args.debug:
         config.debug = True
     config.ensure_dirs()
-    
+
     try:
         if args.command == "download":
             if getattr(args, 'incremental', False) or getattr(args, 'section', None):
@@ -510,5 +523,30 @@ def main():
         sys.exit(130)
 
 
+def _safe_main():
+    """Top-level entry point with global exception handling."""
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(130)
+    except Exception as e:
+        # Print to stderr if available, otherwise show a message box on Windows
+        msg = f"Fatal error: {e}"
+        if sys.stderr:
+            print(msg, file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+        elif sys.platform == "win32":
+            # Windowed mode (no console): show a message box
+            try:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(
+                    0, f"{msg}\n\n{type(e).__name__}: {e}", "bookget - Error", 0x10
+                )
+            except Exception:
+                pass
+        sys.exit(1)
+
+
 if __name__ == "__main__":
-    main()
+    _safe_main()

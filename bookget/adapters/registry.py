@@ -3,6 +3,7 @@
 from typing import Dict, List, Optional, Type
 import importlib
 import pkgutil
+import sys
 from pathlib import Path
 
 from .base import BaseSiteAdapter
@@ -82,23 +83,47 @@ class AdapterRegistry:
             cls._discover_adapters()
             cls._initialized = True
     
+    # Explicit module list for PyInstaller frozen environments
+    _ADAPTER_MODULES = [
+        'bookget.adapters.iiif.base_iiif',
+        'bookget.adapters.iiif.harvard',
+        'bookget.adapters.iiif.ndl',
+        'bookget.adapters.iiif.princeton',
+        'bookget.adapters.iiif.stanford',
+        'bookget.adapters.other.archive_org',
+        'bookget.adapters.other.ctext',
+        'bookget.adapters.other.european',
+        'bookget.adapters.other.hanchi',
+        'bookget.adapters.other.nlc_guji',
+        'bookget.adapters.other.shidianguji',
+        'bookget.adapters.other.taiwan',
+        'bookget.adapters.other.wikisource',
+    ]
+
     @classmethod
     def _discover_adapters(cls):
         """
         Auto-discover and import adapter modules.
-        
-        Looks for adapter classes in:
-        - adapters/iiif/
-        - adapters/other/
+
+        In frozen (PyInstaller) environments, uses an explicit module list.
+        In normal environments, scans subdirectories.
         """
-        adapters_path = Path(__file__).parent
-        
-        # Discover in subdirectories
-        for subdir in ["iiif", "other"]:
-            subdir_path = adapters_path / subdir
-            if subdir_path.exists():
-                cls._import_from_directory(subdir_path, f"bookget.adapters.{subdir}")
-    
+        if getattr(sys, 'frozen', False):
+            # PyInstaller: filesystem scan won't work, use explicit list
+            for module_name in cls._ADAPTER_MODULES:
+                try:
+                    importlib.import_module(module_name)
+                    logger.debug(f"Imported adapter module: {module_name}")
+                except Exception as e:
+                    logger.warning(f"Failed to import {module_name}: {e}")
+        else:
+            # Normal: scan subdirectories
+            adapters_path = Path(__file__).parent
+            for subdir in ["iiif", "other"]:
+                subdir_path = adapters_path / subdir
+                if subdir_path.exists():
+                    cls._import_from_directory(subdir_path, f"bookget.adapters.{subdir}")
+
     @classmethod
     def _import_from_directory(cls, directory: Path, package_prefix: str):
         """Import all Python modules from a directory."""

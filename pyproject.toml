@@ -36,7 +36,7 @@ browser = [
 ]
 
 [project.scripts]
-bookget = "bookget.main:main"
+bookget = "bookget.main:_safe_main"
 
 [tool.setuptools.packages.find]
 where = ["."]

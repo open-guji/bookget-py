@@ -22,3 +22,4 @@ CLAUDE.md
 ui/dist/
 ui/dist-app/
 downloads/
+.pypirc

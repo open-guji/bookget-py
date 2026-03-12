@@ -16,8 +16,24 @@ a = Analysis(
     hiddenimports=[
         'bookget.adapters',
         'bookget.adapters.registry',
-        'bookget.adapters.other',
+        # iiif adapters
         'bookget.adapters.iiif',
+        'bookget.adapters.iiif.base_iiif',
+        'bookget.adapters.iiif.harvard',
+        'bookget.adapters.iiif.ndl',
+        'bookget.adapters.iiif.princeton',
+        'bookget.adapters.iiif.stanford',
+        # other adapters
+        'bookget.adapters.other',
+        'bookget.adapters.other.archive_org',
+        'bookget.adapters.other.ctext',
+        'bookget.adapters.other.european',
+        'bookget.adapters.other.hanchi',
+        'bookget.adapters.other.nlc_guji',
+        'bookget.adapters.other.shidianguji',
+        'bookget.adapters.other.taiwan',
+        'bookget.adapters.other.wikisource',
+        # core
         'bookget.core',
         'bookget.models',
         'bookget.text_parsers',

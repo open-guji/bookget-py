@@ -1,0 +1,82 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'          # 推送 v0.1.0 等 tag 时触发
+  workflow_dispatch:   # 手动触发
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            suffix: .exe
+          - os: macos-latest
+            suffix: ''
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Python dependencies
+        run: |
+          pip install -e ".[dev]"
+          pip install pyinstaller
+
+      - name: Install frontend dependencies
+        working-directory: ui
+        run: npm install
+
+      - name: Build executables
+        run: python packaging/build.py
+
+      - name: Rename artifacts with platform suffix
+        shell: bash
+        run: |
+          OS_TAG="${{ runner.os }}"
+          cd dist
+          for f in bookget-cli${{ matrix.suffix }} bookget-ui${{ matrix.suffix }}; do
+            if [ -f "$f" ]; then
+              base="${f%${{ matrix.suffix }}}"
+              mv "$f" "${base}-${OS_TAG,,}${{ matrix.suffix }}"
+            fi
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookget-${{ runner.os }}
+          path: dist/bookget-*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
