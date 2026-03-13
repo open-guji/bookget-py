@@ -4,7 +4,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/nichuanfang/bookget-py.git
+git clone https://github.com/open-guji/bookget-py.git
 cd bookget-py
 
 # 安装开发依赖

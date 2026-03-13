@@ -45,7 +45,7 @@
 
 ### 方式一：下载可执行文件（推荐）
 
-前往 [Releases](https://github.com/nichuanfang/bookget-py/releases) 下载，无需安装 Python：
+前往 [Releases](https://github.com/open-guji/bookget-py/releases) 下载，无需安装 Python：
 
 - **bookget-cli** — 命令行工具，双击运行（Windows / macOS）
 - **bookget-ui** — 图形界面，双击打开浏览器操作（Windows / macOS）
