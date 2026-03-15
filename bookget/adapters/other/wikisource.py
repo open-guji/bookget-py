@@ -1,8 +1,10 @@
 # 维基文库 (Wikisource) Adapter
 # https://zh.wikisource.org/
 
+import json
 import re
-from typing import List, Optional
+from pathlib import Path
+from typing import List, Optional, Callable
 from urllib.parse import unquote
 import aiohttp
 import asyncio
@@ -10,6 +12,9 @@ import asyncio
 from ..base import BaseSiteAdapter
 from ..registry import AdapterRegistry
 from ...models.book import BookMetadata, Resource, ResourceType, Creator
+from ...models.manifest import (
+    DownloadManifest, ManifestNode, NodeStatus, NodeType, ResourceKind,
+)
 from ...text_parsers.base import StructuredText
 from ...text_parsers.wikisource_parser import WikisourceParser
 from ...logger import logger
@@ -70,7 +75,7 @@ class WikisourceAdapter(BaseSiteAdapter):
 
         raise MetadataExtractionError(f"Could not extract page title from URL: {url}")
 
-    async def get_metadata(self, book_id: str) -> BookMetadata:
+    async def get_metadata(self, book_id: str, index_id: str = "") -> BookMetadata:
         """Fetch metadata from MediaWiki API."""
         session = await self.get_session()
 
@@ -130,6 +135,186 @@ class WikisourceAdapter(BaseSiteAdapter):
 
         return metadata
 
+    async def discover_structure(
+        self,
+        book_id: str,
+        index_id: str = "",
+        depth: int = 1,
+        progress_callback: Callable[[str, str], None] = None,
+    ) -> DownloadManifest:
+        """Discover book structure by listing all subpages via MediaWiki API.
+
+        Automatically handles both flat and nested subpage structures:
+          Flat (e.g. 論語/學而第一):
+            ROOT → CHAPTER × N
+          Nested (e.g. 某書/卷一/章一):
+            ROOT → SECTION × M → CHAPTER × N
+
+        Each leaf CHAPTER node stores its full page title in
+        source_data["page_title"] for use by download_node().
+
+        Custom page filtering / grouping:
+            Set ``self.page_filter`` to a callable
+            ``(page_title: str, book_id: str) -> bool`` to exclude pages.
+            Set ``self.group_key`` to a callable
+            ``(rel_path: str) -> str | None`` that returns a section name
+            for grouping, or None to keep the original hierarchy.
+        """
+        metadata = await self.get_metadata(book_id, index_id=index_id)
+
+        manifest = DownloadManifest(
+            book_id=book_id,
+            source_url=f"https://zh.wikisource.org/wiki/{book_id}",
+            source_site=self.site_id,
+            title=metadata.title,
+            metadata={
+                k: v for k, v in metadata.to_dict().items()
+                if k in ("title", "creators", "dynasty", "category", "language") and v
+            },
+        )
+
+        root = ManifestNode(
+            id=book_id,
+            title=metadata.title,
+            node_type=NodeType.ROOT,
+            status=NodeStatus.DISCOVERED,
+            resource_kind=ResourceKind.TEXT,
+        )
+
+        subpages = await self._list_subpages(book_id)
+
+        # Apply page_filter if set
+        page_filter = getattr(self, "page_filter", None)
+        if page_filter:
+            before = len(subpages)
+            subpages = [p for p in subpages if page_filter(p["title"], book_id)]
+            logger.info(f"Page filter: {before} → {len(subpages)} pages")
+
+        if not subpages:
+            # No subpages: treat the main page itself as a single chapter
+            root.children.append(ManifestNode(
+                id=book_id,
+                title=metadata.title,
+                node_type=NodeType.CHAPTER,
+                status=NodeStatus.DISCOVERED,
+                resource_kind=ResourceKind.TEXT,
+                text_count=1,
+                total_items=1,
+                source_data={"page_title": book_id},
+            ))
+        else:
+            group_key = getattr(self, "group_key", None)
+            self._build_subpage_tree(
+                root, book_id, subpages, progress_callback,
+                group_key=group_key,
+            )
+
+        root.children_count = len(root.children)
+        root.text_count = sum(1 for n in root.get_text_nodes())
+        manifest.root = root
+        manifest.discovery_complete = True
+
+        logger.info(
+            f"Wikisource: discovered {root.text_count} leaf chapters "
+            f"for '{book_id}'"
+        )
+        return manifest
+
+    def _build_subpage_tree(
+        self,
+        root: ManifestNode,
+        book_id: str,
+        subpages: List[dict],
+        progress_callback: Callable[[str, str], None] = None,
+        group_key: Callable[[str], Optional[str]] = None,
+    ) -> None:
+        """Build a manifest tree from a flat list of subpage dicts.
+
+        Subpage titles have the form ``{book_id}/{path}``.  The ``{path}``
+        may be one segment ("卷001") or multiple ("卷一/章一").  This
+        method groups multi-segment paths under intermediate SECTION nodes
+        so the tree mirrors the actual URL hierarchy.
+
+        If *group_key* is provided, it overrides the natural "/" hierarchy.
+        The callable receives the relative path (e.g. "卷001") and returns
+        a section name (e.g. "經部") or None (attach to root directly).
+        This allows custom grouping of flat subpages without requiring
+        them to have a nested URL structure.
+        """
+        section_nodes: dict[str, ManifestNode] = {}
+        prefix = book_id + "/"
+        chapter_seq = 0  # sequential counter for juan numbering
+
+        for page in subpages:
+            full_title = page["title"]
+            rel = full_title[len(prefix):] if full_title.startswith(prefix) else full_title
+
+            # Determine hierarchy: custom group_key overrides URL structure
+            if group_key:
+                group = group_key(rel)
+                parts = [group, rel] if group else [rel]
+            else:
+                parts = rel.split("/")
+
+            if len(parts) == 1:
+                chapter_seq += 1
+                node = ManifestNode(
+                    id=rel,
+                    title=parts[0],
+                    node_type=NodeType.CHAPTER,
+                    status=NodeStatus.DISCOVERED,
+                    resource_kind=ResourceKind.TEXT,
+                    text_count=1,
+                    total_items=1,
+                    source_data={
+                        "page_title": full_title,
+                        "juan_index": chapter_seq,
+                    },
+                )
+                root.children.append(node)
+            else:
+                parent = root
+                for depth_idx, segment in enumerate(parts[:-1]):
+                    section_rel = "/".join(parts[:depth_idx + 1])
+                    if section_rel not in section_nodes:
+                        section_node = ManifestNode(
+                            id=section_rel,
+                            title=segment,
+                            node_type=NodeType.SECTION,
+                            status=NodeStatus.DISCOVERED,
+                            resource_kind=ResourceKind.TEXT,
+                        )
+                        section_nodes[section_rel] = section_node
+                        parent.children.append(section_node)
+                    parent = section_nodes[section_rel]
+
+                chapter_seq += 1
+                leaf = ManifestNode(
+                    id=rel,
+                    title=parts[-1],
+                    node_type=NodeType.CHAPTER,
+                    status=NodeStatus.DISCOVERED,
+                    resource_kind=ResourceKind.TEXT,
+                    text_count=1,
+                    total_items=1,
+                    source_data={
+                        "page_title": full_title,
+                        "juan_index": chapter_seq,
+                    },
+                )
+                parent.children.append(leaf)
+
+            if progress_callback:
+                progress_callback("chapter", full_title)
+
+        # Write total chapter count into each leaf so download_node
+        # can determine the filename zero-padding width.
+        for leaf in root.get_text_nodes():
+            leaf.source_data["juan_total"] = chapter_seq
+
+        for node in section_nodes.values():
+            node.children_count = len(node.children)
+
     async def get_image_list(self, book_id: str) -> List[Resource]:
         """Wikisource is text-only, no images."""
         return []
@@ -158,11 +343,11 @@ class WikisourceAdapter(BaseSiteAdapter):
                 return await self._fetch_single_page(book_id, parser)
 
     async def _list_subpages(self, book_title: str) -> List[dict]:
-        """List all subpages of a book."""
+        """List all subpages of a book, with pagination support."""
         session = await self.get_session()
         subpages = []
 
-        params = {
+        params: dict = {
             "action": "query",
             "list": "allpages",
             "apprefix": f"{book_title}/",
@@ -171,26 +356,31 @@ class WikisourceAdapter(BaseSiteAdapter):
         }
 
         try:
-            async with session.get(self.API_URL, params=params) as response:
-                response.raise_for_status()
-                data = await response.json()
-                pages = data.get("query", {}).get("allpages", [])
+            while True:
+                async with session.get(self.API_URL, params=params) as response:
+                    response.raise_for_status()
+                    data = await response.json()
+                    pages = data.get("query", {}).get("allpages", [])
 
-                for page in pages:
-                    title = page.get("title", "")
-                    # Skip "全覽" (full text view) pages
-                    if title.endswith("/全覽"):
-                        continue
-                    subpages.append({
-                        "title": title,
-                        "pageid": page.get("pageid", 0),
-                    })
+                    for page in pages:
+                        title = page.get("title", "")
+                        if title.endswith("/全覽"):
+                            continue
+                        subpages.append({
+                            "title": title,
+                            "pageid": page.get("pageid", 0),
+                        })
 
-                return subpages
+                    # Check for continuation
+                    cont = data.get("continue", {}).get("apcontinue")
+                    if not cont:
+                        break
+                    params["apcontinue"] = cont
 
         except Exception as e:
             logger.warning(f"Failed to list subpages for {book_title}: {e}")
-            return []
+
+        return subpages
 
     async def _fetch_single_page(
         self, page_title: str, parser: WikisourceParser
@@ -306,6 +496,72 @@ class WikisourceAdapter(BaseSiteAdapter):
             logger.warning(f"Failed to fetch wikitext batch: {e}")
 
         return result
+
+    async def download_node(
+        self,
+        book_id: str,
+        node: ManifestNode,
+        output_dir: Path,
+        progress_callback: Callable[[int, int], None] = None,
+    ) -> ManifestNode:
+        """Download raw wikitext for a single Wikisource chapter node.
+
+        Saves the unprocessed wikitext as-is, preserving all markup,
+        line breaks, and templates.  Downstream scripts handle parsing.
+        """
+        node.status = NodeStatus.DOWNLOADING
+
+        page_title = node.source_data.get("page_title") or book_id
+
+        try:
+            wikitext = await self._fetch_wikitext(page_title)
+        except Exception as e:
+            logger.error(f"Failed to fetch wikitext for '{page_title}': {e}")
+            node.status = NodeStatus.FAILED
+            node.failed_items = 1
+            return node
+
+        if not wikitext:
+            node.status = NodeStatus.FAILED
+            node.failed_items = 1
+            return node
+
+        dest_dir = Path(output_dir)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        juan_index = node.source_data.get("juan_index")
+        if juan_index:
+            total = node.source_data.get("juan_total", 0)
+            width = max(2, len(str(total))) if total else 2
+            filename = f"juan{juan_index:0{width}d}.json"
+        else:
+            filename = "raw.wikisource.json"
+        out_file = dest_dir / filename
+
+        # Extract chapter title from page_title
+        chapter_title = page_title.split("/")[-1] if "/" in page_title else page_title
+
+        data = {
+            "title": chapter_title,
+            "page_title": page_title,
+            "source_url": f"https://zh.wikisource.org/wiki/{page_title}",
+            "content": wikitext,
+        }
+
+        out_file.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        node.status = NodeStatus.COMPLETED
+        node.downloaded_items = 1
+        node.total_items = 1
+        node.local_path = filename
+
+        if progress_callback:
+            progress_callback(1, 1)
+
+        return node
 
     async def close(self):
         """Close HTTP session."""

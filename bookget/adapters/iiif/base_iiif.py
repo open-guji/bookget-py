@@ -63,7 +63,7 @@ class BaseIIIFAdapter(BaseSiteAdapter):
             logger.error(f"Failed to fetch manifest: {e}")
             raise MetadataExtractionError(f"Failed to fetch IIIF manifest: {e}")
     
-    async def get_metadata(self, book_id: str) -> BookMetadata:
+    async def get_metadata(self, book_id: str, index_id: str = "") -> BookMetadata:
         """Extract metadata from IIIF manifest."""
         manifest = await self.get_iiif_manifest(book_id)
         return self._parse_manifest_metadata(manifest, book_id)

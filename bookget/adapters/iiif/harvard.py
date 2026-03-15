@@ -68,7 +68,7 @@ class HarvardAdapter(BaseIIIFAdapter):
         
         raise ValueError(f"Could not extract book ID from URL: {url}")
     
-    async def get_metadata(self, book_id: str) -> BookMetadata:
+    async def get_metadata(self, book_id: str, index_id: str = "") -> BookMetadata:
         """Fetch metadata from Blacklight JSON API."""
         session = await self.get_session()
         

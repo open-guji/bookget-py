@@ -82,7 +82,7 @@ class PalaceMuseumTaipeiAdapter(BaseSiteAdapter):
         
         raise MetadataExtractionError(f"Could not extract ID from URL: {url}")
     
-    async def get_metadata(self, book_id: str) -> BookMetadata:
+    async def get_metadata(self, book_id: str, index_id: str = "") -> BookMetadata:
         """Fetch metadata from NPM API."""
         session = await self.get_session()
         url = f"https://digitalarchive.npm.gov.tw/api/Painting/{book_id}"

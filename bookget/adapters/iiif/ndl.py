@@ -59,7 +59,7 @@ class NDLAdapter(BaseIIIFAdapter):
         
         raise MetadataExtractionError(f"Could not extract book ID from URL: {url}")
     
-    async def get_metadata(self, book_id: str) -> BookMetadata:
+    async def get_metadata(self, book_id: str, index_id: str = "") -> BookMetadata:
         """
         Fetch metadata from NDL Item API.
         

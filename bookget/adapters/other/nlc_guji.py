@@ -83,7 +83,7 @@ class NLCGujiAdapter(BaseSiteAdapter):
 
         raise MetadataExtractionError(f"Could not extract book ID from URL: {url}")
 
-    async def get_metadata(self, book_id: str) -> BookMetadata:
+    async def get_metadata(self, book_id: str, index_id: str = "") -> BookMetadata:
         """Fetch complete metadata from API."""
         session = await self.get_session()
         url = f"{self.BASE_URL}/api/anc/ancMetadataDetail/{book_id}"
