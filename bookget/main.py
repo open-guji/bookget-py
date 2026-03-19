@@ -275,6 +275,77 @@ def cmd_sites(args):
                     print(f"    - {domain}")
 
 
+async def cmd_match(args, config: Config):
+    """Handle match command — exact title + author matching."""
+    manager = ResourceManager(config)
+    authors = [a.strip() for a in args.authors.split(",") if a.strip()] if args.authors else []
+
+    try:
+        result = await manager.match_book(
+            site_id=args.site,
+            title=args.title,
+            authors=authors,
+            delay=args.delay,
+        )
+
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            results = result.get("results", [])
+            if results:
+                print(f"找到 {len(results)} 个资源:")
+                for r in results:
+                    print(f"  - {r['name']}: {r['url']}")
+            else:
+                print("未找到匹配资源")
+    finally:
+        await manager.close()
+
+
+async def cmd_search(args, config: Config):
+    """Handle search command."""
+    manager = ResourceManager(config)
+
+    try:
+        result = await manager.search(
+            site_id=args.site,
+            query=args.query,
+            limit=args.limit,
+            offset=args.offset,
+        )
+
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            total = result.get("total_hits", 0)
+            results = result.get("results", [])
+            print(f"搜索 \"{args.query}\" — 共 {total} 条结果\n")
+
+            for i, r in enumerate(results, 1):
+                title = r["title"]
+                is_disambig = r.get("is_disambiguation", False)
+                versions = r.get("versions", [])
+
+                tag = " [消歧义]" if is_disambig else ""
+                ver_tag = f" [{len(versions)} 个版本]" if versions else ""
+                print(f"  {i}. {title}{tag}{ver_tag}")
+
+                if r.get("snippet"):
+                    snippet = r["snippet"][:80]
+                    print(f"     {snippet}")
+
+                for v in versions:
+                    print(f"     → {v['title']}")
+
+                print()
+
+            if result.get("has_more"):
+                print(f"  还有更多结果，使用 --offset {result['continuation']} 翻页")
+
+    finally:
+        await manager.close()
+
+
 async def cmd_serve(args, config: Config):
     """Handle serve command — start HTTP server."""
     from bookget.server.app import run_server
@@ -468,6 +539,24 @@ def main():
     p_meta.add_argument("--index-id", type=str, help="Global index ID", default="")
     p_meta.add_argument("--format", choices=["text", "json"], default="text")
     
+    # search command
+    p_search = subparsers.add_parser("search", help="Search for books on a site")
+    p_search.add_argument("site", help="Site ID (e.g., wikisource)")
+    p_search.add_argument("query", help="Search keywords")
+    p_search.add_argument("--limit", type=int, default=20, help="Max results (default: 20)")
+    p_search.add_argument("--offset", type=int, default=0, help="Pagination offset")
+    p_search.add_argument("--json", action="store_true", help="Output JSON format")
+
+    # match command
+    p_match = subparsers.add_parser("match", help="Match a book title against a site")
+    p_match.add_argument("site", help="Site ID (e.g., wikisource)")
+    p_match.add_argument("title", help="Book title to match")
+    p_match.add_argument("--authors", type=str, default="",
+                         help="Comma-separated author names")
+    p_match.add_argument("--delay", type=float, default=1.0,
+                         help="API request delay in seconds (default: 1.0)")
+    p_match.add_argument("--json", action="store_true", help="Output JSON format")
+
     # sites command
     p_sites = subparsers.add_parser("sites", help="List or check supported sites")
     p_sites.add_argument("--list", action="store_true", help="List all sites")
@@ -506,6 +595,10 @@ def main():
             asyncio.run(cmd_expand(args, config))
         elif args.command == "metadata":
             asyncio.run(cmd_metadata(args, config))
+        elif args.command == "match":
+            asyncio.run(cmd_match(args, config))
+        elif args.command == "search":
+            asyncio.run(cmd_search(args, config))
         elif args.command == "sites":
             cmd_sites(args)
         elif args.command == "serve":

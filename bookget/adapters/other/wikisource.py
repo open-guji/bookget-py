@@ -15,10 +15,58 @@ from ...models.book import BookMetadata, Resource, ResourceType, Creator
 from ...models.manifest import (
     DownloadManifest, ManifestNode, NodeStatus, NodeType, ResourceKind,
 )
+from ...models.search import SearchResult, SearchResponse
 from ...text_parsers.base import StructuredText
 from ...text_parsers.wikisource_parser import WikisourceParser
+from ...models.search import MatchedResource
 from ...logger import logger
 from ...exceptions import MetadataExtractionError, DownloadError
+
+# 维基文库常见特殊卷名 → 拼音文件名前缀映射
+# 格式: 正则模式 → (前缀, 是否保留尾部数字)
+_SPECIAL_JUAN_PATTERNS: List[tuple] = [
+    (re.compile(r'^卷首(\d+)$'), 'juanshou', True),
+    (re.compile(r'^卷首$'), 'juanshou', False),
+    (re.compile(r'^卷末(\d+)$'), 'juanmo', True),
+    (re.compile(r'^卷末$'), 'juanmo', False),
+    (re.compile(r'^附錄(\d+)$'), 'fulu', True),
+    (re.compile(r'^附錄$'), 'fulu', False),
+    (re.compile(r'^附录(\d+)$'), 'fulu', True),
+    (re.compile(r'^附录$'), 'fulu', False),
+    (re.compile(r'^序(\d+)$'), 'xu', True),
+    (re.compile(r'^序$'), 'xu', False),
+    (re.compile(r'^跋(\d+)$'), 'ba', True),
+    (re.compile(r'^跋$'), 'ba', False),
+    (re.compile(r'^目錄(\d+)$'), 'mulu', True),
+    (re.compile(r'^目錄$'), 'mulu', False),
+    (re.compile(r'^目录(\d+)$'), 'mulu', True),
+    (re.compile(r'^目录$'), 'mulu', False),
+    (re.compile(r'^凡例(\d+)$'), 'fanli', True),
+    (re.compile(r'^凡例$'), 'fanli', False),
+    (re.compile(r'^總目(\d+)$'), 'zongmu', True),
+    (re.compile(r'^總目$'), 'zongmu', False),
+    (re.compile(r'^总目(\d+)$'), 'zongmu', True),
+    (re.compile(r'^总目$'), 'zongmu', False),
+]
+
+
+def _title_to_filename(title: str, juan_index: int, juan_total: int) -> str:
+    """Convert a chapter title to a filename.
+
+    Special titles (卷首, 附錄, etc.) get pinyin-based names.
+    Regular titles (卷001, 卷一, etc.) get sequential juan{NNN} names.
+    """
+    for pattern, prefix, has_num in _SPECIAL_JUAN_PATTERNS:
+        m = pattern.match(title)
+        if m:
+            if has_num:
+                return f"{prefix}{m.group(1)}.json"
+            else:
+                return f"{prefix}.json"
+
+    # Default: sequential juan numbering
+    width = max(2, len(str(juan_total))) if juan_total else 2
+    return f"juan{juan_index:0{width}d}.json"
 
 
 @AdapterRegistry.register
@@ -42,6 +90,7 @@ class WikisourceAdapter(BaseSiteAdapter):
     supports_iiif = False
     supports_images = False
     supports_text = True
+    supports_search = True
 
     API_URL = "https://zh.wikisource.org/w/api.php"
 
@@ -53,6 +102,15 @@ class WikisourceAdapter(BaseSiteAdapter):
     def __init__(self, config=None):
         super().__init__(config)
         self._session: Optional[aiohttp.ClientSession] = None
+
+    def get_headers(self, url: str = None) -> dict:
+        """Override to always use Wikisource-compliant User-Agent.
+
+        MediaWiki API requires a descriptive UA with contact info;
+        generic browser UAs get 403 Forbidden.
+        """
+        headers = dict(self.default_headers)
+        return headers
 
     async def get_session(self) -> aiohttp.ClientSession:
         """Get or create HTTP session."""
@@ -242,6 +300,7 @@ class WikisourceAdapter(BaseSiteAdapter):
         them to have a nested URL structure.
         """
         section_nodes: dict[str, ManifestNode] = {}
+        pending_leaves: list[tuple[ManifestNode, str]] = []  # (node, title) for filename generation
         prefix = book_id + "/"
         chapter_seq = 0  # sequential counter for juan numbering
 
@@ -272,6 +331,7 @@ class WikisourceAdapter(BaseSiteAdapter):
                     },
                 )
                 root.children.append(node)
+                pending_leaves.append((node, parts[0]))
             else:
                 parent = root
                 for depth_idx, segment in enumerate(parts[:-1]):
@@ -303,14 +363,19 @@ class WikisourceAdapter(BaseSiteAdapter):
                     },
                 )
                 parent.children.append(leaf)
+                pending_leaves.append((leaf, parts[-1]))
 
             if progress_callback:
                 progress_callback("chapter", full_title)
 
-        # Write total chapter count into each leaf so download_node
-        # can determine the filename zero-padding width.
-        for leaf in root.get_text_nodes():
-            leaf.source_data["juan_total"] = chapter_seq
+        # Generate filenames for each leaf node.
+        # Special titles (卷首, 附錄, etc.) get pinyin names;
+        # regular chapters get sequential juan{NNN} names.
+        for leaf_node, leaf_title in pending_leaves:
+            leaf_node.source_data["juan_total"] = chapter_seq
+            leaf_node.source_data["filename"] = _title_to_filename(
+                leaf_title, leaf_node.source_data["juan_index"], chapter_seq,
+            )
 
         for node in section_nodes.values():
             node.children_count = len(node.children)
@@ -319,7 +384,7 @@ class WikisourceAdapter(BaseSiteAdapter):
         """Wikisource is text-only, no images."""
         return []
 
-    async def get_structured_text(self, book_id: str) -> Optional[StructuredText]:
+    async def get_structured_text(self, book_id: str, index_id: str = "", progress_callback=None) -> Optional[StructuredText]:
         """
         Fetch text from Wikisource as structured data.
 
@@ -529,13 +594,16 @@ class WikisourceAdapter(BaseSiteAdapter):
         dest_dir = Path(output_dir)
         dest_dir.mkdir(parents=True, exist_ok=True)
 
-        juan_index = node.source_data.get("juan_index")
-        if juan_index:
-            total = node.source_data.get("juan_total", 0)
-            width = max(2, len(str(total))) if total else 2
-            filename = f"juan{juan_index:0{width}d}.json"
-        else:
-            filename = "raw.wikisource.json"
+        # Use pre-computed filename from discover_structure, or fallback
+        filename = node.source_data.get("filename")
+        if not filename:
+            juan_index = node.source_data.get("juan_index")
+            if juan_index:
+                total = node.source_data.get("juan_total", 0)
+                filename = _title_to_filename(
+                    node.title, juan_index, total)
+            else:
+                filename = "raw.wikisource.json"
         out_file = dest_dir / filename
 
         # Extract chapter title from page_title
@@ -562,6 +630,614 @@ class WikisourceAdapter(BaseSiteAdapter):
             progress_callback(1, 1)
 
         return node
+
+    # ------------------------------------------------------------------
+    # Search (supports_search = True)
+    # ------------------------------------------------------------------
+
+    # CJK variant pairs commonly seen in classical Chinese book titles.
+    # Used to expand search queries so that e.g. "注" also matches "註".
+    _CJK_VARIANTS: dict[str, str] = {
+        '注': '註', '註': '注',
+        '于': '於', '於': '于',
+        '台': '臺', '臺': '台',
+        '里': '裏', '裏': '里',
+        '群': '羣', '羣': '群',
+        '峰': '峯', '峯': '峰',
+        '叙': '敘', '敘': '叙',
+        '踪': '蹤', '蹤': '踪',
+        '线': '綫', '綫': '线',
+        '并': '並', '並': '并',
+        '灾': '災', '災': '灾',
+        '余': '餘', '餘': '余',
+        # Additional pairs for match_book (from JS script)
+        '萬': '万', '万': '萬',
+        '與': '与', '与': '與',
+        '書': '书', '书': '書',
+        '經': '经', '经': '經',
+        '傳': '传', '传': '傳',
+        '記': '记', '记': '記',
+        '說': '说', '说': '說',
+        '學': '学', '学': '學',
+        '義': '义', '义': '義',
+        '國': '国', '国': '國',
+        '圖': '图', '图': '圖',
+        '爲': '為', '為': '爲',
+        '觀': '观', '观': '觀',
+        '詩': '诗', '诗': '詩',
+        '禮': '礼', '礼': '禮',
+        '論': '论', '论': '論',
+        '續': '续', '续': '續',
+        '補': '补', '补': '補',
+        '訂': '订', '订': '訂',
+        '鑑': '鉴', '鉴': '鑑',
+        '類': '类', '类': '類',
+        '彙': '汇', '汇': '彙',
+        '歷': '历', '历': '歷',
+        '筆': '笔', '笔': '筆',
+    }
+
+    # Version suffix pattern: "书名 (四庫全書本)" or "书名（通志堂本）"
+    _VERSION_SUFFIX_RE = re.compile(r'^(.+?)\s*[（(](.+?)[）)]$')
+
+    # Known version suffixes on Wikisource
+    _VERSION_SUFFIXES: list[str] = [
+        '四庫全書本', '四部叢刊本', '四部備要本',
+        '百衲本', '武英殿本', '摛藻堂四庫全書薈要本',
+    ]
+
+    # Removable title prefixes (e.g. 欽定四庫全書 → 四庫全書)
+    _REMOVABLE_PREFIXES: list[str] = ['欽定', '御定', '御纂', '御製', '御選']
+
+    # Version suffix slug mapping (Chinese → short English ID)
+    _SLUG_MAP: dict[str, str] = {
+        '四庫全書本': 'siku',
+        '四部叢刊本': 'sibu-congkan',
+        '四部備要本': 'sibu-beiyao',
+        '百衲本': 'baina',
+        '武英殿本': 'wuyingdian',
+        '摛藻堂四庫全書薈要本': 'huiyao',
+    }
+
+    async def search(
+        self,
+        query: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> SearchResponse:
+        """Search Wikisource for books matching *query*.
+
+        Handles CJK variant expansion, disambiguation detection,
+        and multi-version grouping automatically.
+        """
+        # 1. Search with variant expansion
+        queries = self._expand_variants(query)
+        raw_results = await self._mediawiki_search(queries[0], limit, offset)
+        seen_ids = {r["pageid"] for r in raw_results}
+        total_hits = raw_results[0]["_total"] if raw_results else 0
+
+        # If we have a variant query, merge results
+        if len(queries) > 1:
+            for vq in queries[1:]:
+                extra = await self._mediawiki_search(vq, limit, 0)
+                for r in extra:
+                    if r["pageid"] not in seen_ids:
+                        raw_results.append(r)
+                        seen_ids.add(r["pageid"])
+                if extra and extra[0].get("_total", 0) > total_hits:
+                    total_hits = extra[0]["_total"]
+
+        if not raw_results:
+            return SearchResponse(query=query, total_hits=0)
+
+        # 2. Build SearchResult objects
+        results = [
+            SearchResult(
+                title=r["title"],
+                page_id=r["pageid"],
+                url=f"https://zh.wikisource.org/wiki/{r['title']}",
+                snippet=self._clean_snippet(r.get("snippet", "")),
+                source_site=self.site_id,
+            )
+            for r in raw_results
+        ]
+
+        # 3. Batch-detect disambiguation pages
+        await self._detect_disambiguation_batch(results)
+
+        # 4. Expand disambiguation pages
+        for r in results:
+            if r.is_disambiguation:
+                r.versions = await self._expand_disambiguation(r.title)
+
+        # 5. Group multi-version results
+        results = self._group_versions(results)
+
+        has_more = offset + len(results) < total_hits
+        continuation = str(offset + limit) if has_more else ""
+
+        return SearchResponse(
+            query=query,
+            results=results,
+            total_hits=total_hits,
+            has_more=has_more,
+            continuation=continuation,
+        )
+
+    def _expand_variants(self, query: str) -> list[str]:
+        """Generate variant queries for CJK character differences.
+
+        For short queries (≤ 10 chars), produce one extra variant per
+        distinct mapping found.  For longer queries, rely on MediaWiki's
+        built-in variant handling.
+        """
+        if len(query) > 10:
+            return [query]
+
+        variant_chars: dict[int, str] = {}
+        for i, ch in enumerate(query):
+            if ch in self._CJK_VARIANTS:
+                variant_chars[i] = self._CJK_VARIANTS[ch]
+
+        if not variant_chars:
+            return [query]
+
+        # Build a single variant with all substitutions applied
+        chars = list(query)
+        for i, alt in variant_chars.items():
+            chars[i] = alt
+        variant = "".join(chars)
+
+        return [query, variant]
+
+    async def _mediawiki_search(
+        self, query: str, limit: int, offset: int,
+    ) -> list[dict]:
+        """Call MediaWiki search API and return raw result dicts.
+
+        Each dict has keys: title, pageid, snippet, plus a private
+        _total key with the total hit count.
+        """
+        session = await self.get_session()
+        params = {
+            "action": "query",
+            "list": "search",
+            "srsearch": query,
+            "srlimit": str(min(limit, 50)),
+            "sroffset": str(offset),
+            "format": "json",
+        }
+
+        try:
+            async with session.get(self.API_URL, params=params) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+
+                total = data.get("query", {}).get("searchinfo", {}).get("totalhits", 0)
+                items = data.get("query", {}).get("search", [])
+                for item in items:
+                    item["_total"] = total
+                return items
+        except Exception as e:
+            logger.warning(f"Wikisource search failed for '{query}': {e}")
+            return []
+
+    async def _detect_disambiguation_batch(
+        self, results: list[SearchResult],
+    ) -> None:
+        """Batch-fetch categories and mark disambiguation pages."""
+        if not results:
+            return
+
+        session = await self.get_session()
+        batch_size = 50
+
+        for i in range(0, len(results), batch_size):
+            batch = results[i:i + batch_size]
+            titles = "|".join(r.title for r in batch)
+
+            params = {
+                "action": "query",
+                "titles": titles,
+                "prop": "categories",
+                "cllimit": "50",
+                "format": "json",
+            }
+
+            try:
+                async with session.get(self.API_URL, params=params) as resp:
+                    resp.raise_for_status()
+                    data = await resp.json()
+
+                    pages = data.get("query", {}).get("pages", {})
+                    # Build title → categories lookup
+                    cat_map: dict[str, list[str]] = {}
+                    for page_data in pages.values():
+                        title = page_data.get("title", "")
+                        cats = [
+                            c.get("title", "").replace("Category:", "")
+                            for c in page_data.get("categories", [])
+                        ]
+                        cat_map[title] = cats
+
+                    for r in batch:
+                        cats = cat_map.get(r.title, [])
+                        r.categories = cats
+                        if "消歧義" in cats or "消歧义" in cats:
+                            r.is_disambiguation = True
+
+            except Exception as e:
+                logger.warning(f"Failed to fetch categories: {e}")
+
+    async def _expand_disambiguation(self, title: str) -> list[SearchResult]:
+        """Fetch a disambiguation page's wikitext and extract linked titles."""
+        wikitext = await self._fetch_wikitext(title)
+        if not wikitext:
+            return []
+
+        # Extract wiki links: [[Target|Display]] or [[Target]]
+        link_re = re.compile(r'\[\[([^\]|]+)(?:\|[^\]]+)?\]\]')
+        results = []
+
+        for m in link_re.finditer(wikitext):
+            target = m.group(1).strip()
+            # Skip non-article links
+            if any(target.startswith(p) for p in (
+                "Category:", "分類:", "Author:", "作者:",
+                "Wikisource:", "Special:", "s:", "w:",
+            )):
+                continue
+            results.append(SearchResult(
+                title=target,
+                url=f"https://zh.wikisource.org/wiki/{target}",
+                source_site=self.site_id,
+            ))
+
+        return results
+
+    def _group_versions(
+        self, results: list[SearchResult],
+    ) -> list[SearchResult]:
+        """Group results with version suffixes under a single entry.
+
+        E.g. "周易鄭康成註", "周易鄭康成註 (四庫全書本)",
+        "周易鄭康成注 (四部叢刊本)" → one result with 3 versions.
+        """
+        # Pass 1: identify base names and version suffixes
+        base_map: dict[str, list[SearchResult]] = {}
+        standalone: list[SearchResult] = []
+
+        for r in results:
+            # Skip disambiguation pages — they already have their own versions
+            if r.is_disambiguation:
+                standalone.append(r)
+                continue
+
+            m = self._VERSION_SUFFIX_RE.match(r.title)
+            if m:
+                base_name = m.group(1).strip()
+                # Normalize variant characters in base name for grouping
+                norm = self._normalize_variants(base_name)
+                base_map.setdefault(norm, []).append(r)
+            else:
+                # Could be a base entry itself
+                norm = self._normalize_variants(r.title)
+                base_map.setdefault(norm, []).append(r)
+
+        # Pass 2: merge groups
+        grouped: list[SearchResult] = []
+        seen_norms: set[str] = set()
+
+        for r in results:
+            if r.is_disambiguation:
+                grouped.append(r)
+                continue
+
+            m = self._VERSION_SUFFIX_RE.match(r.title)
+            base = m.group(1).strip() if m else r.title
+            norm = self._normalize_variants(base)
+
+            if norm in seen_norms:
+                continue
+            seen_norms.add(norm)
+
+            group = base_map.get(norm, [r])
+            if len(group) >= 2:
+                # Find the "main" entry (one without version suffix)
+                main = next(
+                    (x for x in group if not self._VERSION_SUFFIX_RE.match(x.title)),
+                    group[0],
+                )
+                main.versions = [x for x in group if x is not main]
+                grouped.append(main)
+            else:
+                grouped.append(group[0])
+
+        return grouped
+
+    def _normalize_variants(self, text: str) -> str:
+        """Normalize CJK variants to a canonical form for grouping."""
+        chars = []
+        for ch in text:
+            # Always map to the "first" variant (alphabetically)
+            alt = self._CJK_VARIANTS.get(ch)
+            if alt and alt < ch:
+                chars.append(alt)
+            else:
+                chars.append(ch)
+        return "".join(chars)
+
+    @staticmethod
+    def _clean_snippet(snippet: str) -> str:
+        """Remove HTML tags from MediaWiki search snippet."""
+        return re.sub(r'<[^>]+>', '', snippet)
+
+    # ------------------------------------------------------------------
+    # match_book — exact title + author matching for book index
+    # ------------------------------------------------------------------
+
+    async def match_book(
+        self,
+        title: str,
+        authors: list[str] | None = None,
+        delay: float = 1.0,
+    ) -> list[MatchedResource]:
+        """Match a book by exact title + author against Wikisource.
+
+        Strategy:
+        1. Generate CJK variant titles + removable-prefix variants
+        2. Probe exact title + version-suffix combinations via API
+        3. Handle disambiguation pages using author names
+        4. Fallback: intitle: search with author filtering
+
+        Args:
+            title: Book title (e.g. "周易鄭康成註")
+            authors: Author names for disambiguation (e.g. ["鄭玄"])
+            delay: Seconds between API requests (rate-limiting)
+
+        Returns:
+            List of matched resources (may be empty).
+        """
+        authors = authors or []
+        found: list[MatchedResource] = []
+        seen_urls: set[str] = set()
+
+        def add_result(res_id: str, name: str, url: str, details: str = ""):
+            if url in seen_urls:
+                return
+            seen_urls.add(url)
+            found.append(MatchedResource(
+                id=res_id, name=name, url=url, details=details,
+            ))
+
+        # Step 1: generate title variants
+        title_variants = self._generate_title_variants(title)
+
+        # Add version-suffix variants
+        all_titles = list(title_variants)
+        for suffix in self._VERSION_SUFFIXES:
+            for v in title_variants:
+                all_titles.append(f"{v} ({suffix})")
+
+        # Step 2: batch check page existence + disambiguation
+        page_info = await self._check_pages_batch(all_titles)
+        await asyncio.sleep(delay)
+
+        # Step 3: process results
+        for page_title, info in page_info.items():
+            if not info["exists"]:
+                continue
+
+            if info["is_disambig"]:
+                links = await self._extract_disambig_links(page_title)
+                await asyncio.sleep(delay)
+
+                for link in links:
+                    link_title = link["title"]
+                    # Strategy A: author name appears in link title
+                    matches_author = (
+                        len(authors) > 0
+                        and any(a in link_title for a in authors)
+                    )
+                    # Strategy B: link is a plain main entry (no parenthetical)
+                    link_base = re.sub(
+                        r'\s*[（(][^）)]+[）)]\s*$', '', link_title,
+                    )
+                    is_main_entry = (
+                        link_title == link_base
+                        and any(
+                            link_base in self._generate_title_variants(v)
+                            for v in title_variants
+                        )
+                    )
+
+                    if matches_author or is_main_entry:
+                        suffix = self._extract_version_suffix(link_title)
+                        res_id = f"wikisource-{self._slugify(suffix)}" if suffix else "wikisource"
+                        res_name = f"维基文库（{suffix}）" if suffix else "维基文库"
+                        add_result(res_id, res_name, link["url"])
+            else:
+                suffix = self._extract_version_suffix(page_title)
+                res_id = f"wikisource-{self._slugify(suffix)}" if suffix else "wikisource"
+                res_name = f"维基文库（{suffix}）" if suffix else "维基文库"
+                add_result(res_id, res_name, self._wiki_url(page_title))
+
+        # Step 4: fallback intitle: search if nothing found
+        if not found:
+            search_results = await self._intitle_search(title)
+            await asyncio.sleep(delay)
+
+            candidates = []
+            for sr in search_results:
+                if "/" in sr["title"]:
+                    continue
+                variant_match = any(
+                    sr["title"] == v or sr["title"].startswith(v + " (")
+                    for v in title_variants
+                )
+                if not variant_match:
+                    continue
+                suffix = self._extract_version_suffix(sr["title"])
+                if suffix and suffix not in self._VERSION_SUFFIXES:
+                    if not (authors and any(a in suffix for a in authors)):
+                        continue
+                candidates.append(sr["title"])
+
+            if candidates:
+                candidate_info = await self._check_pages_batch(candidates)
+                await asyncio.sleep(delay)
+
+                for ct, ci in candidate_info.items():
+                    if ci["is_disambig"]:
+                        continue
+                    suffix = self._extract_version_suffix(ct)
+                    res_id = f"wikisource-{self._slugify(suffix)}" if suffix else "wikisource"
+                    res_name = f"维基文库（{suffix}）" if suffix else "维基文库"
+                    add_result(res_id, res_name, self._wiki_url(ct))
+
+        return found
+
+    # -- match_book helpers --
+
+    def _generate_title_variants(self, title: str) -> list[str]:
+        """Generate CJK variant titles (single-char substitutions + prefix removal)."""
+        variants: set[str] = {title}
+
+        # Single-char variant substitutions
+        for i, ch in enumerate(title):
+            alt = self._CJK_VARIANTS.get(ch)
+            if alt:
+                variants.add(title[:i] + alt + title[i + 1:])
+
+        # Removable prefixes
+        for prefix in self._REMOVABLE_PREFIXES:
+            if title.startswith(prefix):
+                stripped = title[len(prefix):]
+                variants.add(stripped)
+                for i, ch in enumerate(stripped):
+                    alt = self._CJK_VARIANTS.get(ch)
+                    if alt:
+                        variants.add(stripped[:i] + alt + stripped[i + 1:])
+
+        return list(variants)
+
+    async def _check_pages_batch(
+        self, titles: list[str],
+    ) -> dict[str, dict]:
+        """Batch-check page existence + disambiguation, with redirect resolution.
+
+        Returns: {canonical_title: {"exists": bool, "pageid": int, "is_disambig": bool}}
+        """
+        results: dict[str, dict] = {}
+        session = await self.get_session()
+        batch_size = 50
+
+        for i in range(0, len(titles), batch_size):
+            batch = titles[i:i + batch_size]
+            params = {
+                "action": "query",
+                "titles": "|".join(batch),
+                "prop": "categories",
+                "clcategories": "Category:消歧义|Category:消歧義",
+                "redirects": "1",
+                "formatversion": "2",
+                "format": "json",
+            }
+
+            try:
+                async with session.get(self.API_URL, params=params) as resp:
+                    resp.raise_for_status()
+                    data = await resp.json()
+
+                    for p in data.get("query", {}).get("pages", []):
+                        if p.get("missing"):
+                            continue
+                        canonical = p["title"]
+                        if canonical in results:
+                            continue
+                        results[canonical] = {
+                            "exists": True,
+                            "pageid": p.get("pageid", 0),
+                            "is_disambig": bool(p.get("categories")),
+                        }
+            except Exception as e:
+                logger.warning(f"_check_pages_batch failed: {e}")
+
+        return results
+
+    async def _extract_disambig_links(self, title: str) -> list[dict]:
+        """Extract wiki links from a disambiguation page.
+
+        Returns: [{"title": str, "url": str}]
+        """
+        wikitext = await self._fetch_wikitext(title)
+        if not wikitext:
+            return []
+
+        link_re = re.compile(r'\[\[([^\]|]+?)(?:\|[^\]]+?)?\]\]')
+        links = []
+        for m in link_re.finditer(wikitext):
+            target = m.group(1).strip()
+            if re.match(
+                r'^(Category|分類|Author|作者|Wikisource|Special|'
+                r's|w|Wikipedia|Commons|File|Image):',
+                target, re.IGNORECASE,
+            ):
+                continue
+            if target.startswith('#'):
+                continue
+            links.append({
+                "title": target,
+                "url": self._wiki_url(target),
+            })
+        return links
+
+    async def _intitle_search(self, title: str) -> list[dict]:
+        """Fallback search using intitle: query.
+
+        Returns: [{"title": str, "pageid": int, "url": str}]
+        """
+        session = await self.get_session()
+        params = {
+            "action": "query",
+            "list": "search",
+            "srsearch": f'intitle:"{title}"',
+            "srlimit": "20",
+            "srnamespace": "0",
+            "formatversion": "2",
+            "format": "json",
+        }
+
+        try:
+            async with session.get(self.API_URL, params=params) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+                return [
+                    {
+                        "title": r["title"],
+                        "pageid": r["pageid"],
+                        "url": self._wiki_url(r["title"]),
+                    }
+                    for r in data.get("query", {}).get("search", [])
+                ]
+        except Exception as e:
+            logger.warning(f"_intitle_search failed for '{title}': {e}")
+            return []
+
+    @staticmethod
+    def _extract_version_suffix(title: str) -> str:
+        """Extract parenthetical suffix: '周易 (四庫全書本)' → '四庫全書本'."""
+        m = re.search(r'[（(]([^）)]+)[）)]\s*$', title)
+        return m.group(1) if m else ""
+
+    def _slugify(self, text: str) -> str:
+        """Map Chinese version name to short English slug."""
+        return self._SLUG_MAP.get(text, text.replace(' ', '-').lower())
+
+    @staticmethod
+    def _wiki_url(page_title: str) -> str:
+        """Build a human-readable Wikisource URL (no percent-encoding for CJK)."""
+        return "https://zh.wikisource.org/wiki/" + page_title.replace(' ', '_')
 
     async def close(self):
         """Close HTTP session."""

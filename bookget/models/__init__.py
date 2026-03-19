@@ -13,6 +13,7 @@ from .manifest import (
     NodeType,
     ResourceKind,
 )
+from .search import SearchResult, SearchResponse
 
 __all__ = [
     "BookMetadata",
@@ -25,5 +26,7 @@ __all__ = [
     "NodeStatus",
     "NodeType",
     "ResourceKind",
+    "SearchResult",
+    "SearchResponse",
 ]
 

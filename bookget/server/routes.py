@@ -6,6 +6,7 @@ from .sse import sse_stream
 
 
 def setup_routes(app: web.Application):
+    app.router.add_get("/api/search", handle_search)
     app.router.add_get("/api/sites", handle_sites)
     app.router.add_get("/api/sites/check", handle_check_url)
     app.router.add_post("/api/discover", handle_discover)
@@ -41,6 +42,21 @@ async def _body(request: web.Request) -> dict:
 
 
 # ── Handlers ─────────────────────────────────────────────────────────────────
+
+async def handle_search(request: web.Request):
+    site = request.rel_url.query.get("site", "")
+    q = request.rel_url.query.get("q", "")
+    if not (site and q):
+        return _err("site and q parameters required")
+    limit = int(request.rel_url.query.get("limit", "20"))
+    offset = int(request.rel_url.query.get("offset", "0"))
+    tm = request.app["task_manager"]
+    try:
+        result = await tm.search(site, q, limit, offset)
+        return _json(result)
+    except Exception as e:
+        return _err(str(e), status=500)
+
 
 async def handle_sites(request: web.Request):
     tm = request.app["task_manager"]

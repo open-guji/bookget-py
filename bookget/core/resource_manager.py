@@ -306,6 +306,62 @@ class ResourceManager:
         """Check if a URL is supported."""
         return AdapterRegistry.get_for_url(url) is not None
 
+    async def search(
+        self,
+        site_id: str,
+        query: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> dict:
+        """Search for books on a specific site.
+
+        Args:
+            site_id: Adapter site_id (e.g. 'wikisource')
+            query: Search keywords
+            limit: Max results per page
+            offset: Pagination offset
+
+        Returns:
+            SearchResponse.to_dict()
+        """
+        adapter_class = AdapterRegistry.get_by_id(site_id)
+        if not adapter_class:
+            raise AdapterNotFoundError(f"site:{site_id}")
+
+        adapter = adapter_class(config=self.config)
+        try:
+            response = await adapter.search(query, limit, offset)
+            return response.to_dict()
+        finally:
+            await adapter.close()
+
+    async def match_book(
+        self,
+        site_id: str,
+        title: str,
+        authors: list[str] | None = None,
+        delay: float = 1.0,
+    ) -> dict:
+        """Match a book title against a site's catalog.
+
+        Returns:
+            MatchResponse.to_dict()
+        """
+        from ..models.search import MatchResponse
+
+        adapter_class = AdapterRegistry.get_by_id(site_id)
+        if not adapter_class:
+            raise AdapterNotFoundError(f"site:{site_id}")
+
+        adapter = adapter_class(config=self.config)
+        try:
+            results = await adapter.match_book(title, authors or [], delay)
+            return MatchResponse(
+                title=title, authors=authors or [], results=results,
+            ).to_dict()
+        finally:
+            await adapter.close()
+
     # ------------------------------------------------------------------
     # Incremental discovery & download (new API)
     # ------------------------------------------------------------------

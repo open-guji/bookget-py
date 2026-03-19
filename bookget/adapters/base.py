@@ -9,6 +9,7 @@ from ..models.book import BookMetadata, Resource
 from ..models.manifest import (
     DownloadManifest, ManifestNode, NodeStatus, NodeType, ResourceKind,
 )
+from ..models.search import SearchResponse
 from ..text_parsers.base import StructuredText
 
 
@@ -30,6 +31,7 @@ class BaseSiteAdapter(ABC):
     supports_text: bool = False
     supports_images: bool = True
     supports_pdf: bool = False
+    supports_search: bool = False
     
     # HTTP configuration
     default_headers: Dict[str, str] = {}
@@ -168,6 +170,32 @@ class BaseSiteAdapter(ABC):
         """
         return None
     
+    # ------------------------------------------------------------------
+    # Search (optional capability)
+    # ------------------------------------------------------------------
+
+    async def search(
+        self,
+        query: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> SearchResponse:
+        """Search for books on this site.
+
+        Override in adapters that support search (set supports_search = True).
+
+        Args:
+            query: Search keywords
+            limit: Maximum number of results
+            offset: Pagination offset
+
+        Returns:
+            SearchResponse with results
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support search"
+        )
+
     # ------------------------------------------------------------------
     # Incremental discovery & download (new API)
     # ------------------------------------------------------------------

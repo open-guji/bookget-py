@@ -36,6 +36,16 @@ class TaskManager:
 
     # ── Public API ──────────────────────────────────────────────────────────
 
+    async def search(
+        self, site_id: str, query: str, limit: int = 20, offset: int = 0,
+    ) -> dict:
+        """Search for books on a specific site."""
+        manager = ResourceManager(self.config)
+        try:
+            return await manager.search(site_id, query, limit, offset)
+        finally:
+            await manager.close()
+
     async def discover(
         self, url: str, output_dir: str | None, depth: int = 1, index_id: str = ""
     ) -> dict:
