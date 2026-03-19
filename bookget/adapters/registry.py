@@ -98,6 +98,7 @@ class AdapterRegistry:
         'bookget.adapters.other.shidianguji',
         'bookget.adapters.other.taiwan',
         'bookget.adapters.other.wikisource',
+        'bookget.adapters.other.wikimedia_commons',
     ]
 
     @classmethod
