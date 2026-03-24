@@ -1,6 +1,6 @@
 {
   "name": "bookget-ui",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "React components for managing ancient book downloads with bookget",
   "type": "module",
   "main": "dist/index.cjs",
@@ -21,7 +21,8 @@
     "dev": "vite",
     "build:lib": "vite build --mode lib",
     "build:app": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prepublishOnly": "npm run build:lib"
   },
   "peerDependencies": {
     "react": ">=18.0.0",
