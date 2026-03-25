@@ -67,6 +67,7 @@ class MatchedResource:
     url: str         # e.g. "https://zh.wikisource.org/wiki/周易"
     type: str = "text"
     details: str = ""
+    quality: dict = field(default_factory=dict)  # 资源质量信号
 
     def to_dict(self) -> dict:
         d = {
@@ -77,6 +78,8 @@ class MatchedResource:
         }
         if self.details:
             d["details"] = self.details
+        if self.quality:
+            d["quality"] = self.quality
         return d
 
 

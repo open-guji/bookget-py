@@ -7,11 +7,13 @@
 import re
 import asyncio
 import json
+import urllib.parse
 from typing import List, Optional, Callable
 
 from ..base import BaseSiteAdapter
 from ..registry import AdapterRegistry
 from ...models.book import BookMetadata, Resource, ResourceType, Creator
+from ...models.search import MatchedResource, SearchResponse, SearchResult
 from ...text_parsers.base import StructuredText
 from ...text_parsers.shidianguji_parser import ShidianGujiParser
 from ...logger import logger
@@ -48,6 +50,7 @@ class ShidianGujiAdapter(BaseSiteAdapter):
     supports_iiif = False
     supports_images = True
     supports_text = True
+    supports_search = True
 
     BASE_URL = "https://www.shidianguji.com"
     _CDN_HOST = "byteimg.com"
@@ -56,6 +59,20 @@ class ShidianGujiAdapter(BaseSiteAdapter):
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     )
+
+    # Role words to strip from author names
+    _ROLE_WORDS = re.compile(r'[撰注疏輯校點箋補纂訂譯編釋]$')
+
+    # Lazy-loaded OpenCC converters
+    _s2t: Optional[object] = None
+    _t2s: Optional[object] = None
+    _variant_map: Optional[dict[str, str]] = None
+
+    def __init__(self, config=None):
+        super().__init__(config)
+        self._pw = None
+        self._browser = None
+        self._context = None
 
     def _check_playwright(self):
         if not HAS_PLAYWRIGHT:
@@ -71,8 +88,48 @@ class ShidianGujiAdapter(BaseSiteAdapter):
             return match.group(1)
         raise MetadataExtractionError(f"Could not extract book ID from URL: {url}")
 
+    async def _ensure_browser(self):
+        """Ensure a persistent browser instance is available (reuse across calls)."""
+        if self._browser and self._browser.is_connected():
+            return
+        self._check_playwright()
+        self._pw = await async_playwright().start()
+        try:
+            self._browser = await self._pw.chromium.launch(headless=True)
+        except Exception as e:
+            await self._pw.stop()
+            self._pw = None
+            raise DownloadError(
+                "Chromium 浏览器未安装。请运行: playwright install chromium"
+            ) from e
+        self._context = await self._browser.new_context(
+            user_agent=self._USER_AGENT,
+            viewport={"width": 1280, "height": 900},
+        )
+
+    async def _close_browser(self):
+        """Close the persistent browser instance."""
+        if self._browser:
+            try:
+                await self._browser.close()
+            except Exception:
+                pass
+            self._browser = None
+            self._context = None
+        if self._pw:
+            try:
+                await self._pw.stop()
+            except Exception:
+                pass
+            self._pw = None
+
     async def _launch_browser(self):
-        """Start Playwright, launch Chromium, return (pw, browser, context)."""
+        """Start Playwright, launch Chromium, return (pw, browser, context).
+
+        Used by get_metadata / get_image_list / get_structured_text which
+        manage their own browser lifecycle.
+        """
+        self._check_playwright()
         pw = await async_playwright().start()
         try:
             browser = await pw.chromium.launch(headless=True)
@@ -439,6 +496,497 @@ class ShidianGujiAdapter(BaseSiteAdapter):
         }
         return parser.parse(all_paragraphs, book_id, url, meta)
 
+    # ------------------------------------------------------------------
+    # Search
+    # ------------------------------------------------------------------
+
+    async def search(
+        self,
+        query: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> SearchResponse:
+        """Search 识典古籍 for books matching *query*.
+
+        Navigates to the search page in Playwright and intercepts the
+        ``/api/ancientlib/read/search/book/v1`` response.
+        """
+        all_books = await self._search_books(query)
+
+        total_hits = len(all_books)
+        page_results = all_books[offset:offset + limit]
+        has_more = (offset + limit) < total_hits
+
+        results = []
+        for b in page_results:
+            book_id = b.get("bookId", "")
+            book_name = b.get("bookName", "")
+            authors = b.get("authors", [])
+            dynasty = b.get("dynastyCategoryName", "")
+            author_str = self._format_authors(authors)
+            snippet = f"（{dynasty}）{author_str}" if dynasty else author_str
+            results.append(SearchResult(
+                title=book_name,
+                url=f"{self.BASE_URL}/book/{book_id}" if book_id else "",
+                snippet=snippet,
+                source_site=self.site_id,
+            ))
+
+        return SearchResponse(
+            query=query,
+            results=results,
+            total_hits=total_hits,
+            has_more=has_more,
+            continuation=str(offset + limit) if has_more else "",
+        )
+
+    async def _search_books(self, query: str) -> list[dict]:
+        """Execute a search via Playwright and return the raw book list.
+
+        Strategy:
+        1. Navigate to /zh/search/{query} (SSR page with full-text results)
+        2. Click the "搜书籍" tab to trigger book search API
+        3. Intercept /api/ancientlib/read/search/book/v1 response
+        4. Return list of book dicts from searchBookList
+
+        Returns list of dicts with keys: bookId, bookName, authors,
+        dynastyCategoryName, addNames, etc.  Each entry is the "book"
+        sub-dict unwrapped from the API response.
+        """
+        await self._ensure_browser()
+
+        search_results: list[dict] = []
+        api_done = asyncio.Event()
+
+        page = await self._context.new_page()
+        try:
+            async def on_response(response):
+                if "/api/ancientlib/read/search/book/v1" in response.url:
+                    try:
+                        data = await response.json()
+                        if data.get("errorCode") == 0:
+                            book_list = data.get("data", {}).get(
+                                "searchBookList", []
+                            )
+                            for item in book_list:
+                                book = item.get("book", item)
+                                search_results.append(book)
+                            api_done.set()
+                    except Exception:
+                        api_done.set()
+
+            page.on("response", on_response)
+
+            encoded = urllib.parse.quote(query)
+            search_url = f"{self.BASE_URL}/zh/search/{encoded}"
+            logger.debug(f"[识典古籍] Searching: {search_url}")
+            try:
+                await page.goto(
+                    search_url, wait_until="networkidle", timeout=30000
+                )
+            except Exception as e:
+                logger.warning(f"[识典古籍] Search page.goto: {e}")
+
+            # Click the "搜书籍" tab to trigger the book search API
+            try:
+                book_tab = page.locator(
+                    'div.semi-tabs-tab:has-text("搜书籍")'
+                )
+                await book_tab.click(timeout=5000)
+            except Exception as e:
+                logger.warning(f"[识典古籍] Could not click book tab: {e}")
+
+            try:
+                await asyncio.wait_for(api_done.wait(), timeout=15.0)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"[识典古籍] Timeout waiting for book search API "
+                    f"for '{query}'"
+                )
+
+        finally:
+            await page.close()
+
+        return search_results
+
+    @staticmethod
+    def _format_authors(authors) -> str:
+        """Format authors list/string to a readable string."""
+        if isinstance(authors, str):
+            try:
+                authors = json.loads(authors)
+            except (json.JSONDecodeError, TypeError):
+                return authors
+        if not isinstance(authors, list):
+            return ""
+        names = []
+        for a in authors:
+            if isinstance(a, dict):
+                names.append(a.get("persName") or a.get("name", ""))
+            elif isinstance(a, str):
+                names.append(a)
+        return "、".join(n for n in names if n)
+
+    @staticmethod
+    def _extract_author_names(authors) -> list[str]:
+        """Extract author name strings from the API authors field."""
+        if isinstance(authors, str):
+            try:
+                authors = json.loads(authors)
+            except (json.JSONDecodeError, TypeError):
+                return [authors] if authors else []
+        if not isinstance(authors, list):
+            return []
+        names = []
+        for a in authors:
+            if isinstance(a, dict):
+                name = a.get("persName") or a.get("name", "")
+                if name:
+                    names.append(name)
+            elif isinstance(a, str) and a:
+                names.append(a)
+        return names
+
+    # ------------------------------------------------------------------
+    # match_book — exact title + author matching for book index
+    # ------------------------------------------------------------------
+
+    async def match_book(
+        self,
+        title: str,
+        authors: list[str] | None = None,
+        delay: float = 1.0,
+    ) -> list[MatchedResource]:
+        """Match a book by title + author against 识典古籍.
+
+        Strategy:
+        1. Generate title variants (simplified/traditional)
+        2. Search each variant via Playwright
+        3. Filter by exact title match
+        4. Verify author/dynasty if authors provided
+        5. Return matched resources
+
+        Args:
+            title: Book title (e.g. "周易")
+            authors: Author names for filtering (e.g. ["王弼"])
+            delay: Seconds between search requests
+
+        Returns:
+            List of matched resources.
+        """
+        authors = authors or []
+        found: list[MatchedResource] = []
+        seen_ids: set[str] = set()
+
+        def add_result(book_id: str, book_name: str, details: str = "",
+                       quality: dict | None = None):
+            if book_id in seen_ids:
+                return
+            seen_ids.add(book_id)
+            found.append(MatchedResource(
+                id="shidianguji",
+                name="识典古籍",
+                url=f"{self.BASE_URL}/book/{book_id}",
+                details=details,
+                quality=quality or {},
+            ))
+
+        # Generate title variants
+        title_variants = self._generate_title_variants(title)
+        search_queries = list(dict.fromkeys(title_variants))[:3]
+
+        # Search with each variant
+        all_books: list[dict] = []
+        seen_book_ids: set[str] = set()
+
+        for i, query in enumerate(search_queries):
+            if i > 0:
+                await asyncio.sleep(delay)
+            books = await self._search_books(query)
+            for b in books:
+                bid = b.get("bookId", "")
+                if bid and bid not in seen_book_ids:
+                    seen_book_ids.add(bid)
+                    all_books.append(b)
+            # If first query has exact title matches, skip variants
+            if books and any(
+                self._title_matches(b.get("bookName", ""), title_variants)
+                for b in books
+            ):
+                break
+
+        # Filter by exact title match
+        candidates = [
+            b for b in all_books
+            if self._title_matches(b.get("bookName", ""), title_variants)
+        ]
+
+        if not candidates:
+            return found
+
+        def _extract_details_and_quality(b: dict) -> tuple[str, dict]:
+            dynasty = b.get("dynastyCategoryName", "")
+            author_str = self._format_authors(b.get("authors", []))
+            details = ""
+            if dynasty and author_str:
+                details = f"（{dynasty}）{author_str}"
+            elif author_str:
+                details = author_str
+            extra = b.get("extra", {})
+            quality = {
+                "version": b.get("version", 0),
+                "total_page": b.get("totalPage", 0),
+                "paragraph_count": extra.get("paragraphNumber", 0),
+                "has_translation": extra.get("translateStatus", 0) >= 2,
+                "edition": b.get("edition", {}).get("edition", ""),
+            }
+            return details, quality
+
+        # No authors to filter — return all title-matched candidates
+        if not authors:
+            for b in candidates:
+                book_id = b.get("bookId", "")
+                book_name = b.get("bookName", "")
+                details, quality = _extract_details_and_quality(b)
+                add_result(book_id, book_name, details, quality)
+            return found
+
+        # With authors: classify candidates by match quality
+        author_matched: list[dict] = []
+        surname_matched: list[dict] = []
+        unmatched: list[dict] = []
+
+        for b in candidates:
+            result_authors = self._extract_author_names(b.get("authors", []))
+            if not result_authors:
+                author_matched.append(b)
+            elif self._author_matches(result_authors, authors):
+                author_matched.append(b)
+            elif self._surname_matches(result_authors, authors):
+                surname_matched.append(b)
+            else:
+                unmatched.append(b)
+
+        # Use strict matches if any; else surname; else accept all if ≤ 3
+        if author_matched:
+            accepted = author_matched
+        elif surname_matched:
+            accepted = surname_matched
+        elif len(unmatched) <= 3:
+            accepted = unmatched
+        else:
+            accepted = []
+
+        for b in accepted:
+            book_id = b.get("bookId", "")
+            book_name = b.get("bookName", "")
+            details, quality = _extract_details_and_quality(b)
+            add_result(book_id, book_name, details, quality)
+
+        return found
+
+    # ------------------------------------------------------------------
+    # Title / author matching helpers (shared with CText pattern)
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def _get_s2t(cls):
+        if cls._s2t is None:
+            try:
+                from opencc import OpenCC
+                cls._s2t = OpenCC('s2t')
+            except ImportError:
+                return None
+        return cls._s2t
+
+    @classmethod
+    def _get_t2s(cls):
+        if cls._t2s is None:
+            try:
+                from opencc import OpenCC
+                cls._t2s = OpenCC('t2s')
+            except ImportError:
+                return None
+        return cls._t2s
+
+    @classmethod
+    def _get_variant_map(cls) -> dict[str, str]:
+        """Load CJK variant→standard character mapping from OpenCC dicts."""
+        if cls._variant_map is not None:
+            return cls._variant_map
+
+        import os
+        vmap: dict[str, str] = {}
+        try:
+            import opencc
+            dict_dir = os.path.join(os.path.dirname(opencc.__file__), 'dictionary')
+
+            jp_path = os.path.join(dict_dir, 'JPVariants.txt')
+            if os.path.exists(jp_path):
+                with open(jp_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        parts = line.strip().split('\t')
+                        if len(parts) == 2:
+                            std = parts[0]
+                            for v in parts[1].split(' '):
+                                if len(v) == 1 and len(std) == 1 and v != std:
+                                    vmap[v] = std
+
+            for fn in ('TWVariantsRev.txt', 'HKVariantsRev.txt'):
+                fp = os.path.join(dict_dir, fn)
+                if os.path.exists(fp):
+                    with open(fp, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            parts = line.strip().split('\t')
+                            if len(parts) == 2:
+                                v = parts[0]
+                                std = parts[1].split(' ')[0]
+                                if len(v) == 1 and len(std) == 1 and v != std:
+                                    vmap[v] = std
+        except Exception:
+            pass
+
+        cls._variant_map = vmap
+        return vmap
+
+    @classmethod
+    def _normalize_variants(cls, text: str) -> str:
+        """Normalize CJK variant characters to standard traditional forms."""
+        vmap = cls._get_variant_map()
+        if vmap:
+            text = ''.join(vmap.get(ch, ch) for ch in text)
+        s2t = cls._get_s2t()
+        if s2t:
+            try:
+                text = s2t.convert(text)
+            except Exception:
+                pass
+        return text
+
+    def _generate_title_variants(self, title: str) -> list[str]:
+        """Generate CJK variant titles (simplified/traditional + variants)."""
+        variants: set[str] = {title}
+
+        s2t = self._get_s2t()
+        t2s = self._get_t2s()
+        if s2t:
+            try:
+                variants.add(s2t.convert(title))
+            except Exception:
+                pass
+        if t2s:
+            try:
+                variants.add(t2s.convert(title))
+            except Exception:
+                pass
+
+        # Removable prefixes common in Siku titles
+        removable = ['欽定', '御定', '御纂', '御製', '御選']
+        base_variants = set(variants)
+        for prefix in removable:
+            for v in base_variants:
+                if v.startswith(prefix):
+                    variants.add(v[len(prefix):])
+
+        return list(variants)
+
+    def _title_matches(
+        self, candidate: str, title_variants: list[str],
+    ) -> bool:
+        """Check if candidate title matches any of the title variants."""
+        norm_candidate = self._normalize_variants(candidate)
+        candidate_forms = {candidate, norm_candidate}
+        t2s = self._get_t2s()
+        if t2s:
+            try:
+                candidate_forms.add(t2s.convert(norm_candidate))
+            except Exception:
+                pass
+
+        norm_variants: set[str] = set(title_variants)
+        for v in title_variants:
+            norm_variants.add(self._normalize_variants(v))
+
+        for cf in candidate_forms:
+            for v in norm_variants:
+                if cf == v:
+                    return True
+        return False
+
+    def _author_matches(
+        self, result_authors: list[str], query_authors: list[str],
+    ) -> bool:
+        """Check if any result author matches any query author.
+
+        Handles role-word stripping, variant normalization, and
+        simplified↔traditional conversion.
+        """
+        result_forms: set[str] = set()
+        for ra in result_authors:
+            clean = self._ROLE_WORDS.sub('', ra)
+            norm = self._normalize_variants(clean)
+            result_forms.add(clean)
+            result_forms.add(norm)
+            t2s = self._get_t2s()
+            if t2s:
+                try:
+                    result_forms.add(t2s.convert(norm))
+                except Exception:
+                    pass
+
+        for qa in query_authors:
+            clean_qa = self._ROLE_WORDS.sub('', qa)
+            norm_qa = self._normalize_variants(clean_qa)
+            qa_forms = {clean_qa, norm_qa}
+            t2s = self._get_t2s()
+            if t2s:
+                try:
+                    qa_forms.add(t2s.convert(norm_qa))
+                except Exception:
+                    pass
+
+            for rf in result_forms:
+                for qf in qa_forms:
+                    if rf == qf:
+                        return True
+                    if qf in rf or rf in qf:
+                        return True
+        return False
+
+    def _surname_matches(
+        self, result_authors: list[str], query_authors: list[str],
+    ) -> bool:
+        """Check if result authors share a surname with any query author."""
+        result_surnames: set[str] = set()
+        for ra in result_authors:
+            clean = self._ROLE_WORDS.sub('', ra)
+            norm = self._normalize_variants(clean)
+            if norm:
+                result_surnames.add(norm[0])
+                t2s = self._get_t2s()
+                if t2s:
+                    try:
+                        result_surnames.add(t2s.convert(norm[0]))
+                    except Exception:
+                        pass
+
+        for qa in query_authors:
+            clean_qa = self._ROLE_WORDS.sub('', qa)
+            norm_qa = self._normalize_variants(clean_qa)
+            if norm_qa:
+                if norm_qa[0] in result_surnames:
+                    return True
+                t2s = self._get_t2s()
+                if t2s:
+                    try:
+                        if t2s.convert(norm_qa[0]) in result_surnames:
+                            return True
+                    except Exception:
+                        pass
+        return False
+
+    # ------------------------------------------------------------------
+
     async def close(self):
-        """No persistent resources."""
-        pass
+        """Clean up persistent browser if any."""
+        await self._close_browser()
