@@ -1,17 +1,16 @@
 # Bookget
 
-古籍数字资源下载工具，支持从 15+ 个数字图书馆网站批量下载古籍图片和文字。
+古籍数字资源下载与管理工具，支持从 20+ 个数字图书馆网站下载古籍图片和文字资源。全异步架构，插件式适配器设计。
 
 ## 支持的网站
 
 ### 中国大陆
 
-| 网站 | 域名 | 图片 | 文字 |
-|------|------|:----:|:----:|
-| 中华古籍智慧化服务平台 | `guji.nlc.cn` | ✓ | ✓ |
-| 识典古籍 | `shidianguji.com` | ✓ | ✓ |
-| 中国哲学书电子化计划 | `ctext.org` | | ✓ |
-| 维基文库 | `zh.wikisource.org` | | ✓ |
+| 网站 | 域名 | 图片 | 文字 | 搜索 |
+|------|------|:----:|:----:|:----:|
+| 中华古籍智慧化服务平台 | `guji.nlc.cn` | ✓ | ✓ | |
+| 识典古籍 | `shidianguji.com` | ✓ | ✓ | ✓ |
+| 中国哲学书电子化计划 | `ctext.org` | | ✓ | ✓ |
 
 ### 日本 / 台湾
 
@@ -36,19 +35,27 @@
 
 ### 通用
 
-| 网站 | 域名 | 图片 |
-|------|------|:----:|
-| Internet Archive | `archive.org` | ✓ |
-| 通用 IIIF | 任意 IIIF Manifest URL | ✓ |
+| 网站 | 域名 | 图片 | 搜索 |
+|------|------|:----:|:----:|
+| Wikimedia Commons | `commons.wikimedia.org` | ✓ | ✓ |
+| 维基文库 | `zh.wikisource.org` | | ✓ |
+| Internet Archive | `archive.org` | ✓ | |
+| 通用 IIIF | 任意 IIIF Manifest URL | ✓ | |
 
 ## 安装
 
 ### 方式一：下载可执行文件（推荐）
 
-前往 [Releases](https://github.com/open-guji/bookget-py/releases) 下载，无需安装 Python：
+前往 [Releases](https://github.com/open-guji/bookget-py/releases) 下载对应平台的文件，无需安装 Python：
 
-- **bookget-cli** — 命令行工具，双击运行（Windows / macOS）
-- **bookget-ui** — 图形界面，双击打开浏览器操作（Windows / macOS）
+| 文件 | 说明 |
+|------|------|
+| `bookget-cli-windows.exe` | Windows 命令行工具，双击运行 |
+| `bookget-cli-macos` | macOS 命令行工具 |
+| `bookget-ui-windows.exe` | Windows 图形界面，双击打开浏览器操作 |
+| `bookget-ui-macos` | macOS 图形界面 |
+
+> macOS 用户首次运行需赋予执行权限：`chmod +x bookget-cli-macos`
 
 ### 方式二：pip 安装
 
@@ -58,7 +65,7 @@
 pip install bookget
 ```
 
-如需下载**识典古籍**，还需安装浏览器组件：
+如需下载**识典古籍**（需要浏览器自动化绕过反爬）：
 
 ```bash
 pip install "bookget[browser]"
@@ -67,9 +74,9 @@ playwright install chromium
 
 ## 使用方法
 
-### 图形界面
+### 图形界面（bookget-ui）
 
-双击运行 `bookget-ui`，自动打开浏览器，在网页中操作。
+双击运行 `bookget-ui`，自动打开浏览器，在网页中操作即可。
 
 或通过命令行启动：
 
@@ -77,9 +84,9 @@ playwright install chromium
 bookget serve
 ```
 
-### 交互模式
+### 交互模式（bookget-cli）
 
-直接运行 `bookget`（或双击 `bookget-cli`），按提示操作：
+直接运行 `bookget`（或双击 `bookget-cli`），按提示逐步操作：
 
 ```
 =======================================================
@@ -98,21 +105,50 @@ bookget serve
 开始下载所有节点？[Y/n]:
 ```
 
-下载完成后会自动回到输入界面，可以继续下载其他古籍。按 `q` 或 `Ctrl+C` 退出。
+下载完成后自动回到输入界面，可继续下载其他古籍。按 `q` 或 `Ctrl+C` 退出。
 
 ### 命令行模式
 
+#### 下载古籍
+
 ```bash
-# 下载古籍
+# 基本下载
 bookget download "URL" -o ./output
 
-# 增量下载（中断后可继续）
+# 增量下载（支持断点续传）
 bookget download "URL" -o ./output --incremental --concurrency 3
 
 # 只下载图片，不下载文字
 bookget download "URL" -o ./output --no-text
 
-# 获取书籍信息
+# 只下载文字
+bookget download "URL" -o ./output --no-images
+```
+
+#### 结构发现与分步下载
+
+```bash
+# 发现书目结构（不下载）
+bookget discover "URL" -o ./output
+
+# 展开某个节点
+bookget expand "URL" -o ./output --node NODE_ID
+```
+
+#### 搜索与匹配
+
+```bash
+# 在指定站点搜索书名
+bookget search --site ctext --query "周易"
+
+# 精确匹配书名和作者
+bookget match --site shidianguji --title "周易" --authors "孔颖达"
+```
+
+#### 其他命令
+
+```bash
+# 获取书籍元数据
 bookget metadata "URL"
 
 # 查看所有支持的网站
@@ -132,6 +168,7 @@ bookget sites --check "URL"
 | `--no-images` | 跳过图片 |
 | `--no-text` | 跳过文字 |
 | `--section NODE_ID` | 只下载指定章节 |
+| `--json` | 以 JSON 格式输出结果 |
 | `-q, --quiet` | 安静模式，减少输出 |
 
 ## 配置
@@ -149,6 +186,32 @@ bookget sites --check "URL"
 ```bash
 bookget --config config.json download "URL"
 ```
+
+## 从源码构建
+
+如果你想自行构建可执行文件：
+
+```bash
+# 克隆仓库
+git clone https://github.com/open-guji/bookget-py.git
+cd bookget-py
+
+# 安装依赖
+pip install -e ".[dev]"
+pip install pyinstaller
+
+# 安装前端依赖
+cd ui && npm install && cd ..
+
+# 构建两个可执行文件
+python packaging/build.py
+
+# 或只构建其中一个
+python packaging/build.py cli   # 只构建 bookget-cli
+python packaging/build.py ui    # 只构建 bookget-ui（会自动构建前端）
+```
+
+构建产物在 `dist/` 目录下。
 
 ## 许可证
 

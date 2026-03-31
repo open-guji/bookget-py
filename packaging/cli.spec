@@ -32,6 +32,7 @@ a = Analysis(
         'bookget.adapters.other.nlc_guji',
         'bookget.adapters.other.shidianguji',
         'bookget.adapters.other.taiwan',
+        'bookget.adapters.other.wikimedia_commons',
         'bookget.adapters.other.wikisource',
         # core
         'bookget.core',

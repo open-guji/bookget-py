@@ -12,8 +12,13 @@ jobs:
       matrix:
         include:
           - os: windows-latest
+            platform: windows
             suffix: .exe
           - os: macos-latest
+            platform: macos
+            suffix: ''
+          - os: ubuntu-latest
+            platform: linux
             suffix: ''
 
     runs-on: ${{ matrix.os }}
@@ -46,37 +51,88 @@ jobs:
       - name: Rename artifacts with platform suffix
         shell: bash
         run: |
-          OS_TAG="${{ runner.os }}"
           cd dist
           for f in bookget-cli${{ matrix.suffix }} bookget-ui${{ matrix.suffix }}; do
             if [ -f "$f" ]; then
               base="${f%${{ matrix.suffix }}}"
-              mv "$f" "${base}-${OS_TAG,,}${{ matrix.suffix }}"
+              mv "$f" "${base}-${{ matrix.platform }}${{ matrix.suffix }}"
             fi
           done
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: bookget-${{ runner.os }}
+          name: bookget-${{ matrix.platform }}
           path: dist/bookget-*
 
+  pypi:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      id-token: write   # Trusted Publisher (PyPI OIDC)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build sdist & wheel
+        run: |
+          pip install build
+          python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
   release:
-    needs: build
+    needs: [build, pypi]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
 
+      - name: List artifacts
+        run: ls -lh artifacts/
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
           generate_release_notes: true
+          body: |
+            ## 安装
+
+            ### 方式一：下载可执行文件（推荐）
+
+            下载对应平台的文件，双击运行即可（无需安装 Python）：
+
+            | 文件 | 说明 |
+            |------|------|
+            | `bookget-cli-windows.exe` | Windows 命令行工具 |
+            | `bookget-cli-macos` | macOS 命令行工具 |
+            | `bookget-cli-linux` | Linux 命令行工具 |
+            | `bookget-ui-windows.exe` | Windows 图形界面（双击打开浏览器） |
+            | `bookget-ui-macos` | macOS 图形界面 |
+            | `bookget-ui-linux` | Linux 图形界面 |
+
+            > macOS / Linux 用户需先赋予执行权限：`chmod +x bookget-*`
+
+            ### 方式二：pip install
+
+            ```bash
+            pip install bookget
+            ```
+
+            详细使用说明见 [README](https://github.com/open-guji/bookget-py#使用方法)。

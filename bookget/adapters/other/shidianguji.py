@@ -89,7 +89,12 @@ class ShidianGujiAdapter(BaseSiteAdapter):
         raise MetadataExtractionError(f"Could not extract book ID from URL: {url}")
 
     async def _ensure_browser(self):
-        """Ensure a persistent browser instance is available (reuse across calls)."""
+        """Ensure a persistent browser instance is available (reuse across calls).
+
+        Uses headless=False because 识典古籍's ByteDance SecSDK detects
+        headless browsers, causing unstable API responses.  The window
+        is moved offscreen to stay out of the way.
+        """
         if self._browser and self._browser.is_connected():
             return
         self._check_playwright()
@@ -582,10 +587,13 @@ class ShidianGujiAdapter(BaseSiteAdapter):
             logger.debug(f"[识典古籍] Searching: {search_url}")
             try:
                 await page.goto(
-                    search_url, wait_until="networkidle", timeout=30000
+                    search_url, wait_until="domcontentloaded", timeout=30000
                 )
             except Exception as e:
                 logger.warning(f"[识典古籍] Search page.goto: {e}")
+
+            # Wait for JS to initialize the search UI before clicking
+            await asyncio.sleep(1)
 
             # Click the "搜书籍" tab to trigger the book search API
             try:
@@ -597,7 +605,7 @@ class ShidianGujiAdapter(BaseSiteAdapter):
                 logger.warning(f"[识典古籍] Could not click book tab: {e}")
 
             try:
-                await asyncio.wait_for(api_done.wait(), timeout=15.0)
+                await asyncio.wait_for(api_done.wait(), timeout=30.0)
             except asyncio.TimeoutError:
                 logger.warning(
                     f"[识典古籍] Timeout waiting for book search API "
@@ -725,22 +733,20 @@ class ShidianGujiAdapter(BaseSiteAdapter):
             return found
 
         def _extract_details_and_quality(b: dict) -> tuple[str, dict]:
-            dynasty = b.get("dynastyCategoryName", "")
-            author_str = self._format_authors(b.get("authors", []))
-            details = ""
-            if dynasty and author_str:
-                details = f"（{dynasty}）{author_str}"
-            elif author_str:
-                details = author_str
+            # details: 不再放朝代/作者（与 Book/Work 主体重复）
             extra = b.get("extra", {})
+            # checkType: 1=粗校, 2=精校, 3=AI整理
+            check_type = b.get("checkType", 0)
+            check_label = {1: "粗校", 2: "精校", 3: "AI整理"}.get(check_type, "")
             quality = {
                 "version": b.get("version", 0),
                 "total_page": b.get("totalPage", 0),
                 "paragraph_count": extra.get("paragraphNumber", 0),
                 "has_translation": extra.get("translateStatus", 0) >= 2,
                 "edition": b.get("edition", {}).get("edition", ""),
+                "check_type": check_label,
             }
-            return details, quality
+            return "", quality
 
         # No authors to filter — return all title-matched candidates
         if not authors:
