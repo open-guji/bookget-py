@@ -408,6 +408,130 @@ class WikimediaCommonsAdapter(BaseSiteAdapter):
         return ext or ".jpg"
 
     # ------------------------------------------------------------------
+    # download_node
+    # ------------------------------------------------------------------
+
+    async def download_node(
+        self,
+        book_id: str,
+        node: "ManifestNode",
+        output_dir: "Path",
+        progress_callback=None,
+    ) -> "ManifestNode":
+        """Download the original file (PDF/DjVu) for a manifest node.
+
+        Downloads the full original file rather than per-page thumbnails.
+        The file can be split into pages locally afterwards.
+        """
+        from pathlib import Path as _Path
+        from ...models.manifest import NodeStatus
+
+        node.status = NodeStatus.DOWNLOADING
+
+        # Get the original file URL via API
+        file_title = node.source_data.get("file_title") or book_id
+        session = await self.get_session()
+        params = {
+            "action": "query",
+            "titles": file_title,
+            "prop": "imageinfo",
+            "iiprop": "url|mime|size",
+            "formatversion": "2",
+            "format": "json",
+        }
+
+        try:
+            async with session.get(self.API_URL, params=params) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+        except Exception as e:
+            logger.error(f"Failed to get file info for '{file_title}': {e}")
+            node.status = NodeStatus.FAILED
+            node.failed_items = 1
+            return node
+
+        pages = data.get("query", {}).get("pages", [])
+        if not pages or pages[0].get("missing"):
+            logger.error(f"File not found: {file_title}")
+            node.status = NodeStatus.FAILED
+            node.failed_items = 1
+            return node
+
+        info = pages[0].get("imageinfo", [{}])[0]
+        original_url = info.get("url", "")
+        mime = info.get("mime", "")
+        file_size = info.get("size", 0)
+
+        if not original_url:
+            logger.error(f"No download URL for: {file_title}")
+            node.status = NodeStatus.FAILED
+            node.failed_items = 1
+            return node
+
+        # Determine filename from the original URL
+        ext = self._get_extension(mime, file_title)
+        # Use clean filename from title
+        clean_title = file_title.removeprefix("File:").rsplit(".", 1)[0]
+        filename = f"{clean_title}{ext}"
+        # Sanitize for filesystem
+        filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
+
+        dest = _Path(output_dir)
+        dest.mkdir(parents=True, exist_ok=True)
+        out_path = dest / filename
+
+        node.total_items = 1
+
+        # Skip if already downloaded with correct size
+        if out_path.exists() and file_size and out_path.stat().st_size == file_size:
+            logger.info(f"Already downloaded: {filename}")
+            node.downloaded_items = 1
+            node.status = NodeStatus.COMPLETED
+            if progress_callback:
+                progress_callback(1, 1)
+            return node
+
+        # Download via curl (aiohttp is blocked by Wikimedia TLS fingerprinting)
+        import subprocess
+        try:
+            proc = await asyncio.to_thread(
+                subprocess.run,
+                [
+                    "curl", "-fSL",
+                    "-o", str(out_path),
+                    # Use curl's default UA; Wikimedia blocks custom bot-style UAs
+                    # on upload.wikimedia.org while allowing curl's default.
+                    "--retry", "3",
+                    "--retry-delay", "2",
+                    original_url,
+                ],
+                capture_output=True,
+                timeout=600,
+            )
+            if proc.returncode == 0 and out_path.exists() and out_path.stat().st_size > 0:
+                logger.info(f"Downloaded: {filename} ({out_path.stat().st_size} bytes)")
+                node.downloaded_items = 1
+                node.status = NodeStatus.COMPLETED
+            else:
+                stderr = proc.stderr.decode(errors='replace').strip()
+                logger.error(f"curl failed for {filename}: {stderr}")
+                node.failed_items = 1
+                node.status = NodeStatus.FAILED
+                if out_path.exists():
+                    out_path.unlink()
+        except Exception as e:
+            logger.error(f"Failed to download {filename}: {e}")
+            node.failed_items = 1
+            node.status = NodeStatus.FAILED
+            if out_path.exists():
+                out_path.unlink()
+
+        if progress_callback:
+            progress_callback(node.downloaded_items, 1)
+
+        return node
+
+    # ------------------------------------------------------------------
     # search
     # ------------------------------------------------------------------
 

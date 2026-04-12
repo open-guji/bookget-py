@@ -16,9 +16,6 @@ venv/
 .pytest_cache/
 .ruff_cache/
 
-.claude/
-CLAUDE.md
-
 ui/dist/
 ui/dist-app/
 downloads/
