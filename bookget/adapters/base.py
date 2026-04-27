@@ -306,6 +306,15 @@ class BaseSiteAdapter(ABC):
                         total_items=len(vol_images),
                         source_data={
                             "image_urls": [img.url for img in vol_images],
+                            "images": [
+                                {
+                                    "url": img.url,
+                                    "filename": img.get_filename(),
+                                    "page": img.page,
+                                    "volume": img.volume,
+                                }
+                                for img in vol_images
+                            ],
                         },
                     )
                     root.children.append(vol_node)

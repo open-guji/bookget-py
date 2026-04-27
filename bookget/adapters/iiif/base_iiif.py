@@ -1,6 +1,9 @@
 # Base IIIF Adapter - Handles IIIF-compatible digital libraries
 
+import asyncio
+import os
 import re
+from pathlib import Path
 from typing import List, Optional, Dict, Any
 from urllib.parse import urlparse, urljoin
 import aiohttp
@@ -8,6 +11,7 @@ import aiohttp
 from ..base import BaseSiteAdapter
 from ..registry import AdapterRegistry
 from ...models.book import BookMetadata, Resource, ResourceType, Creator
+from ...models.manifest import ManifestNode, NodeStatus
 from ...logger import logger
 from ...exceptions import MetadataExtractionError
 
@@ -29,10 +33,32 @@ class BaseIIIFAdapter(BaseSiteAdapter):
     
     # Subclasses should override these
     manifest_url_template: str = ""  # e.g., "https://example.com/iiif/{book_id}/manifest.json"
-    
+
+    # IIIF Image API "size" parameter used when constructing download URLs.
+    # Defaults to "full" (IIIF 2.x); IIIF 3 sites may override to "max".
+    # Common values: "full" / "max" / "1600," / "2400," / ",1600".
+    DEFAULT_IIIF_SIZE: str = "full"
+
     def __init__(self, config=None):
         super().__init__(config)
         self._session: Optional[aiohttp.ClientSession] = None
+
+    @property
+    def iiif_size(self) -> str:
+        """
+        Resolve IIIF Image API size parameter for downloads.
+
+        Priority:
+            1. BOOKGET_<SITE>_IIIF_SIZE environment variable
+            2. BOOKGET_IIIF_SIZE environment variable (global)
+            3. self.DEFAULT_IIIF_SIZE
+        """
+        site_var = f"BOOKGET_{(self.site_id or '').upper()}_IIIF_SIZE"
+        return (
+            os.environ.get(site_var)
+            or os.environ.get("BOOKGET_IIIF_SIZE")
+            or self.DEFAULT_IIIF_SIZE
+        )
     
     async def get_session(self) -> aiohttp.ClientSession:
         """Get or create HTTP session."""
@@ -187,10 +213,10 @@ class BaseIIIFAdapter(BaseSiteAdapter):
             width = resource_data.get("width", canvas.get("width", 0))
             height = resource_data.get("height", canvas.get("height", 0))
             
-            # Construct full-quality image URL if we have service ID
+            # Construct image URL at the configured size if we have a service ID
             if service_id:
-                # IIIF Image API 2.0: {service_id}/full/full/0/default.jpg
-                image_url = f"{service_id}/full/full/0/default.jpg"
+                # IIIF Image API: {service_id}/full/{size}/0/default.jpg
+                image_url = f"{service_id}/full/{self.iiif_size}/0/default.jpg"
             
             resource = Resource(
                 url=image_url,
@@ -205,6 +231,101 @@ class BaseIIIFAdapter(BaseSiteAdapter):
         
         return resources
     
+    async def download_node(
+        self,
+        book_id: str,
+        node: ManifestNode,
+        output_dir: Path,
+        progress_callback=None,
+    ) -> ManifestNode:
+        """
+        Download all images for a manifest volume node.
+
+        Reads ``node.source_data["images"]`` (list of {url, filename, page,
+        volume} dicts) populated by ``_discover_from_legacy``, and writes
+        each image into ``output_dir`` using its filename. Falls back to
+        ``image_urls`` for backward compatibility.
+
+        Concurrency is controlled by the adapter's config
+        (``config.download.concurrent_downloads``, default 4).
+        """
+        images = node.source_data.get("images")
+        if not images:
+            urls = node.source_data.get("image_urls", [])
+            images = [
+                {"url": u, "filename": f"{i + 1:04d}.jpg"}
+                for i, u in enumerate(urls)
+            ]
+
+        if not images:
+            logger.warning(f"Node {node.id} has no images")
+            node.status = NodeStatus.FAILED
+            return node
+
+        node.status = NodeStatus.DOWNLOADING
+        node.total_items = len(images)
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        session = await self.get_session()
+        headers = self.get_headers()
+
+        # Concurrency from config; fallback to 4
+        concurrency = 4
+        min_size = 1024
+        if self.config and hasattr(self.config, "download"):
+            concurrency = max(1, self.config.download.concurrent_downloads)
+            min_size = self.config.download.min_image_size
+
+        semaphore = asyncio.Semaphore(concurrency)
+        downloaded = 0
+        failed = 0
+
+        async def fetch_one(item: dict) -> bool:
+            nonlocal downloaded, failed
+            url = item["url"]
+            filename = item.get("filename") or url.rsplit("/", 1)[-1]
+            out_path = output_dir / filename
+
+            if out_path.exists() and out_path.stat().st_size >= min_size:
+                downloaded += 1
+                if progress_callback:
+                    progress_callback(downloaded, len(images))
+                return True
+
+            async with semaphore:
+                try:
+                    async with session.get(url, headers=headers) as resp:
+                        resp.raise_for_status()
+                        content = await resp.read()
+                    if len(content) < min_size:
+                        logger.warning(f"Image too small: {filename}")
+                        failed += 1
+                        return False
+                    out_path.write_bytes(content)
+                    downloaded += 1
+                    if progress_callback:
+                        progress_callback(downloaded, len(images))
+                    return True
+                except Exception as e:
+                    logger.warning(f"Failed {url}: {e}")
+                    failed += 1
+                    return False
+
+        await asyncio.gather(*[fetch_one(it) for it in images])
+
+        node.downloaded_items = downloaded
+        node.failed_items = failed
+        if downloaded == len(images):
+            node.status = NodeStatus.COMPLETED
+        elif downloaded > 0:
+            # Partial — keep DISCOVERED so it gets retried next run
+            node.status = NodeStatus.DISCOVERED
+        else:
+            node.status = NodeStatus.FAILED
+
+        return node
+
     async def close(self):
         """Close HTTP session."""
         if self._session and not self._session.closed:

@@ -13,6 +13,7 @@ Usage:
 import argparse
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -441,6 +442,19 @@ async def _interactive_mode():
             except ValueError:
                 concurrency = 3
             print(f"  → 并行数：{concurrency}")
+
+            # --- Step 3b: IIIF image resolution (only for IIIF adapters) ---
+            if getattr(adapter, "supports_iiif", False):
+                print("\n选择图片分辨率：")
+                print("  1) 最高清 (原始尺寸 max/full，文件最大)")
+                print("  2) 高清    (2400px 宽)")
+                print("  3) 阅读    (1600px 宽)  ← 默认")
+                print("  4) 缩略    (800px 宽)")
+                size_input = input("输入序号 [3]: ").strip() or "3"
+                size_map = {"1": "max", "2": "2400,", "3": "1600,", "4": "800,"}
+                chosen = size_map.get(size_input, "1600,")
+                os.environ["BOOKGET_IIIF_SIZE"] = chosen
+                print(f"  → 分辨率：{chosen}")
             print()
 
             # --- Step 4: Discover ---

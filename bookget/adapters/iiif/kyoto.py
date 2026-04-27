@@ -32,10 +32,10 @@ class KyotoRMDAAdapter(BaseIIIFAdapter):
     supports_iiif = True
     supports_text = False
 
-    # IIIF Image API size parameter for downloads.
-    # "max" = full-size original (very large; ~4MB+ per page on this site).
-    # Override via env var BOOKGET_KYOTO_IIIF_SIZE (e.g. "2400," or "full").
-    DEFAULT_IIIF_SIZE = os.environ.get("BOOKGET_KYOTO_IIIF_SIZE", "max")
+    # RMDA serves IIIF Presentation 3.0; "max" is the canonical "original size"
+    # parameter (≈4 MB JPEG for typical pages). Use BOOKGET_KYOTO_IIIF_SIZE
+    # or BOOKGET_IIIF_SIZE env var to override (e.g. "2400," / "1600,").
+    DEFAULT_IIIF_SIZE = "max"
 
     def extract_book_id(self, url: str) -> str:
         """
@@ -154,7 +154,7 @@ class KyotoRMDAAdapter(BaseIIIFAdapter):
         """
         resources: List[Resource] = []
         canvases = manifest.get("items", []) or []
-        size = self.DEFAULT_IIIF_SIZE
+        size = self.iiif_size
 
         for idx, canvas in enumerate(canvases):
             page_label = self._extract_label(canvas.get("label", "")) or str(idx + 1)
