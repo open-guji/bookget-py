@@ -5,8 +5,14 @@ Minimal CLI-only build (no server, no frontend assets).
 """
 import sys
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_submodules
 
 ROOT = Path(SPECPATH).parent
+
+# Auto-discover all adapter modules so we never miss a new one.
+# Replaces the previous hand-maintained list which silently dropped new adapters
+# (v0.3.0 shipped without bookget.adapters.iiif.kyoto for this reason).
+adapter_imports = collect_submodules('bookget.adapters')
 
 a = Analysis(
     [str(ROOT / 'bookget' / 'main.py')],
@@ -14,27 +20,7 @@ a = Analysis(
     binaries=[],
     datas=[],
     hiddenimports=[
-        'bookget.adapters',
-        'bookget.adapters.registry',
-        # iiif adapters
-        'bookget.adapters.iiif',
-        'bookget.adapters.iiif.base_iiif',
-        'bookget.adapters.iiif.harvard',
-        'bookget.adapters.iiif.kyoto',
-        'bookget.adapters.iiif.ndl',
-        'bookget.adapters.iiif.princeton',
-        'bookget.adapters.iiif.stanford',
-        # other adapters
-        'bookget.adapters.other',
-        'bookget.adapters.other.archive_org',
-        'bookget.adapters.other.ctext',
-        'bookget.adapters.other.european',
-        'bookget.adapters.other.hanchi',
-        'bookget.adapters.other.nlc_guji',
-        'bookget.adapters.other.shidianguji',
-        'bookget.adapters.other.taiwan',
-        'bookget.adapters.other.wikimedia_commons',
-        'bookget.adapters.other.wikisource',
+        *adapter_imports,
         # core
         'bookget.core',
         'bookget.models',

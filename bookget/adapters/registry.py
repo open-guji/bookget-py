@@ -83,60 +83,37 @@ class AdapterRegistry:
             cls._discover_adapters()
             cls._initialized = True
     
-    # Explicit module list for PyInstaller frozen environments
-    _ADAPTER_MODULES = [
-        'bookget.adapters.iiif.base_iiif',
-        'bookget.adapters.iiif.harvard',
-        'bookget.adapters.iiif.kyoto',
-        'bookget.adapters.iiif.ndl',
-        'bookget.adapters.iiif.princeton',
-        'bookget.adapters.iiif.stanford',
-        'bookget.adapters.other.archive_org',
-        'bookget.adapters.other.ctext',
-        'bookget.adapters.other.european',
-        'bookget.adapters.other.hanchi',
-        'bookget.adapters.other.nlc_guji',
-        'bookget.adapters.other.shidianguji',
-        'bookget.adapters.other.taiwan',
-        'bookget.adapters.other.wikisource',
-        'bookget.adapters.other.wikimedia_commons',
-    ]
+    # Adapter sub-packages to scan. Add a new entry only when introducing
+    # a whole new category of adapters; individual modules are auto-discovered.
+    _ADAPTER_PACKAGES = ["bookget.adapters.iiif", "bookget.adapters.other"]
 
     @classmethod
     def _discover_adapters(cls):
         """
-        Auto-discover and import adapter modules.
+        Auto-discover and import every adapter module under the configured
+        sub-packages.
 
-        In frozen (PyInstaller) environments, uses an explicit module list.
-        In normal environments, scans subdirectories.
+        Works in both normal and PyInstaller frozen environments because
+        ``pkgutil.iter_modules`` honours each package's ``__path__``,
+        which PyInstaller's FrozenImporter populates correctly when the
+        modules are bundled (the spec uses ``collect_submodules`` to
+        ensure that).
         """
-        if getattr(sys, 'frozen', False):
-            # PyInstaller: filesystem scan won't work, use explicit list
-            for module_name in cls._ADAPTER_MODULES:
-                try:
-                    importlib.import_module(module_name)
-                    logger.debug(f"Imported adapter module: {module_name}")
-                except Exception as e:
-                    logger.warning(f"Failed to import {module_name}: {e}")
-        else:
-            # Normal: scan subdirectories
-            adapters_path = Path(__file__).parent
-            for subdir in ["iiif", "other"]:
-                subdir_path = adapters_path / subdir
-                if subdir_path.exists():
-                    cls._import_from_directory(subdir_path, f"bookget.adapters.{subdir}")
+        for pkg_name in cls._ADAPTER_PACKAGES:
+            try:
+                pkg = importlib.import_module(pkg_name)
+            except Exception as e:
+                logger.warning(f"Failed to import package {pkg_name}: {e}")
+                continue
 
-    @classmethod
-    def _import_from_directory(cls, directory: Path, package_prefix: str):
-        """Import all Python modules from a directory."""
-        for item in directory.iterdir():
-            if item.suffix == ".py" and not item.name.startswith("_"):
-                module_name = f"{package_prefix}.{item.stem}"
+            for mod_info in pkgutil.iter_modules(pkg.__path__, prefix=pkg.__name__ + "."):
+                if mod_info.name.rsplit(".", 1)[-1].startswith("_"):
+                    continue
                 try:
-                    importlib.import_module(module_name)
-                    logger.debug(f"Imported adapter module: {module_name}")
+                    importlib.import_module(mod_info.name)
+                    logger.debug(f"Imported adapter module: {mod_info.name}")
                 except Exception as e:
-                    logger.warning(f"Failed to import {module_name}: {e}")
+                    logger.warning(f"Failed to import {mod_info.name}: {e}")
 
 
 def get_adapter(url: str, config=None) -> Optional[BaseSiteAdapter]:

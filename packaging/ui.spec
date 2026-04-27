@@ -6,6 +6,7 @@ Double-click to launch browser UI at http://localhost:8765.
 """
 import sys
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_submodules
 
 ROOT = Path(SPECPATH).parent
 DIST_APP = ROOT / 'ui' / 'dist-app'
@@ -16,6 +17,9 @@ if not DIST_APP.exists():
         "Run: cd ui && npm run build:app"
     )
 
+# Auto-discover all adapter modules so we never miss a new one.
+adapter_imports = collect_submodules('bookget.adapters')
+
 a = Analysis(
     [str(ROOT / 'bookget' / 'main.py')],
     pathex=[str(ROOT)],
@@ -25,27 +29,7 @@ a = Analysis(
         (str(DIST_APP), 'ui/dist-app'),
     ],
     hiddenimports=[
-        'bookget.adapters',
-        'bookget.adapters.registry',
-        # iiif adapters
-        'bookget.adapters.iiif',
-        'bookget.adapters.iiif.base_iiif',
-        'bookget.adapters.iiif.harvard',
-        'bookget.adapters.iiif.kyoto',
-        'bookget.adapters.iiif.ndl',
-        'bookget.adapters.iiif.princeton',
-        'bookget.adapters.iiif.stanford',
-        # other adapters
-        'bookget.adapters.other',
-        'bookget.adapters.other.archive_org',
-        'bookget.adapters.other.ctext',
-        'bookget.adapters.other.european',
-        'bookget.adapters.other.hanchi',
-        'bookget.adapters.other.nlc_guji',
-        'bookget.adapters.other.shidianguji',
-        'bookget.adapters.other.taiwan',
-        'bookget.adapters.other.wikimedia_commons',
-        'bookget.adapters.other.wikisource',
+        *adapter_imports,
         # core
         'bookget.core',
         'bookget.models',
