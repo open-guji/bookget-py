@@ -20,6 +20,7 @@ a = Analysis(
         'bookget.adapters.iiif',
         'bookget.adapters.iiif.base_iiif',
         'bookget.adapters.iiif.harvard',
+        'bookget.adapters.iiif.kyoto',
         'bookget.adapters.iiif.ndl',
         'bookget.adapters.iiif.princeton',
         'bookget.adapters.iiif.stanford',
