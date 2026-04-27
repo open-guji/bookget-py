@@ -650,15 +650,24 @@ class ResourceManager:
                             'completed': completed,
                             'total': total,
                         })
+                    # Scale per-node timeout by expected work: a base allowance
+                    # plus 8s per item (covers slow IIIF tile servers and big
+                    # original-size images). Hard cap to keep stuck nodes
+                    # from blocking forever.
+                    item_count = max(1, getattr(node, 'total_items', 0) or 1)
+                    node_timeout = min(3600, max(180, 60 + item_count * 8))
                     try:
                         await asyncio.wait_for(
                             adapter.download_node(
                                 book_id, node, node_dir, progress_callback=None),
-                            timeout=120,  # 单节点最多 120 秒
+                            timeout=node_timeout,
                         )
                         success = node.status == NodeStatus.COMPLETED
                     except asyncio.TimeoutError:
-                        logger.error(f"Node {node.id} timed out after 120s")
+                        logger.error(
+                            f"Node {node.id} timed out after {node_timeout}s "
+                            f"(downloaded {getattr(node, 'downloaded_items', 0)}"
+                            f"/{item_count})")
                         node.status = NodeStatus.FAILED
                         success = False
                     except Exception as e:

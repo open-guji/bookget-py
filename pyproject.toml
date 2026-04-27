@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bookget"
-version = "0.3.3"
+version = "0.3.4"
 description = "Download and parse ancient Chinese book resources from digital libraries"
 readme = "README.md"
 license = { file = "LICENSE" }

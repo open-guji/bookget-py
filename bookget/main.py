@@ -477,15 +477,33 @@ async def _interactive_mode():
             print("\n开始下载……")
             manager2 = ResourceManager(config)
             try:
-                manifest2 = await manager2.download_incremental(
-                    url=url,
-                    output_dir=output_dir,
-                    concurrency=concurrency,
-                    progress_callback=progress_bar,
-                )
-                print()
-                p = manifest2.get_progress()
-                print(f"\n完成！{p['completed']}/{p['total']} 节点，输出目录：{output_dir}\n")
+                attempt = 1
+                while True:
+                    manifest2 = await manager2.download_incremental(
+                        url=url,
+                        output_dir=output_dir,
+                        concurrency=concurrency,
+                        progress_callback=progress_bar,
+                    )
+                    print()
+                    p = manifest2.get_progress()
+                    failed = p.get('failed', 0)
+                    print(
+                        f"\n第 {attempt} 轮：{p['completed']}/{p['total']} 完成，"
+                        f"{failed} 失败")
+
+                    if failed == 0:
+                        print(f"\n全部完成！输出目录：{output_dir}\n")
+                        break
+
+                    retry = input(
+                        f"还有 {failed} 个节点失败，重试？[Y/n]: "
+                    ).strip().lower()
+                    if retry in ("n", "no"):
+                        print(f"\n保留 {failed} 个失败节点，下次跑同一 URL+目录可继续。\n")
+                        break
+                    attempt += 1
+                    print(f"\n开始第 {attempt} 轮重试……")
             except KeyboardInterrupt:
                 print("\n已中断。下次运行可从中断处继续。\n")
             finally:
