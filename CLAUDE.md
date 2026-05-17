@@ -22,11 +22,11 @@ bookget/
 │   └── resource_manager.py  # 核心协调器，串联适配器→下载器→存储
 ├── models/
 │   └── book.py              # 数据模型 (BookMetadata, Resource, DownloadTask)
-├── adapters/                # 网站适配器 (14 个已实现)
+├── adapters/                # 网站适配器 (15 个已实现)
 │   ├── base.py              # BaseSiteAdapter 抽象基类
 │   ├── registry.py          # 适配器自动发现与注册
 │   ├── iiif/                # IIIF 站点: Harvard, NDL, Princeton, Stanford, Berkeley
-│   └── other/               # 独立站点: NLC Guji, CText, Shidianguji, Hanchi, Wikisource, Archive.org, BnF, BL, BSB, 台湾NCL/NPM
+│   └── other/               # 独立站点: NLC Guji, NLC Read（读者云门户）, CText, Shidianguji, Hanchi, Wikisource, Archive.org, BnF, BL, BSB, 台湾NCL/NPM
 ├── downloaders/             # 下载器 (ImageDownloader, IIIFImageDownloader, TextDownloader)
 ├── storage/
 │   └── file_storage.py      # 文件存储管理，目录结构规范
