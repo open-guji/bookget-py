@@ -16,6 +16,7 @@ from ...models.book import BookMetadata, Resource, ResourceType, Creator
 from ...models.search import MatchedResource, SearchResponse, SearchResult
 from ...text_parsers.base import StructuredText
 from ...text_parsers.shidianguji_parser import ShidianGujiParser
+from ...shared import cjk_match
 from ...logger import logger
 from ...exceptions import MetadataExtractionError, DownloadError
 
@@ -59,14 +60,6 @@ class ShidianGujiAdapter(BaseSiteAdapter):
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     )
-
-    # Role words to strip from author names
-    _ROLE_WORDS = re.compile(r'[撰注疏輯校點箋補纂訂譯編釋]$')
-
-    # Lazy-loaded OpenCC converters
-    _s2t: Optional[object] = None
-    _t2s: Optional[object] = None
-    _variant_map: Optional[dict[str, str]] = None
 
     def __init__(self, config=None):
         super().__init__(config)
@@ -399,6 +392,7 @@ class ShidianGujiAdapter(BaseSiteAdapter):
         self._check_playwright()
 
         all_paragraphs: list[dict] = []
+        paragraphs_seen: set[str] = set()
         chapters_seen: set[str] = set()
         book_info: dict = {}
 
@@ -420,13 +414,14 @@ class ShidianGujiAdapter(BaseSiteAdapter):
                         data = await response.json()
                         if data.get("errorCode") == 0:
                             paras = data["data"].get("paragraphs", [])
-                            chapter_id = data["data"].get("chapterId") or (
-                                paras[0].get("chapterId") if paras else ""
-                            )
-                            key = str(chapter_id)
-                            if key and key not in chapters_seen:
-                                all_paragraphs.extend(paras)
-                                chapters_seen.add(key)
+                            for p in paras:
+                                pid = str(p.get("paragraphId", ""))
+                                if pid and pid not in paragraphs_seen:
+                                    paragraphs_seen.add(pid)
+                                    all_paragraphs.append(p)
+                                    ch = str(p.get("chapterId", ""))
+                                    if ch:
+                                        chapters_seen.add(ch)
                     except Exception:
                         pass
 
@@ -441,42 +436,47 @@ class ShidianGujiAdapter(BaseSiteAdapter):
 
             await asyncio.sleep(5)
 
-            # Determine chapter count from catalog
+            # Determine expected paragraph count from metadata
             catalog_raw = book_info.get("catalog", "[]")
             try:
                 catalog = json.loads(catalog_raw) if isinstance(catalog_raw, str) else catalog_raw
             except Exception:
                 catalog = []
-            total_chapters = len(catalog) or 99  # fallback if catalog empty
+            total_chapters = len(catalog) or 99
+            total_paragraphs = int(book_info.get("paragraphCount", 0)) or 999
 
-            logger.info(f"[识典古籍] Book has {total_chapters} chapters, collecting text...")
+            logger.info(
+                f"[识典古籍] Book has {total_chapters} chapters, "
+                f"~{total_paragraphs} paragraphs, collecting text..."
+            )
 
             stall_count = 0
-            prev_len = len(chapters_seen)
+            prev_len = len(paragraphs_seen)
+            max_nav = max(total_paragraphs * 2, total_chapters * 5 + 50)
 
-            for nav in range(total_chapters * 5 + 50):
-                if len(chapters_seen) >= total_chapters:
+            for nav in range(max_nav):
+                if len(paragraphs_seen) >= total_paragraphs:
                     break
                 await page.keyboard.press("ArrowRight")
                 await asyncio.sleep(1.2)
 
-                if len(chapters_seen) == prev_len:
+                if len(paragraphs_seen) == prev_len:
                     stall_count += 1
-                    if stall_count >= 20:
+                    if stall_count >= 30:
                         logger.warning(
-                            f"[识典古籍] No new chapters after 20 keypresses; stopping "
-                            f"({len(chapters_seen)}/{total_chapters} chapters collected)"
+                            f"[识典古籍] No new paragraphs after 30 keypresses; stopping "
+                            f"({len(paragraphs_seen)}/{total_paragraphs} paragraphs collected)"
                         )
                         break
                 else:
                     stall_count = 0
-                    prev_len = len(chapters_seen)
+                    prev_len = len(paragraphs_seen)
                     if progress_callback:
-                        progress_callback(len(chapters_seen), total_chapters)
+                        progress_callback(len(paragraphs_seen), total_paragraphs)
 
                 if (nav + 1) % 30 == 0:
                     logger.info(
-                        f"[识典古籍] Nav {nav+1}: {len(chapters_seen)}/{total_chapters} chapters"
+                        f"[识典古籍] Nav {nav+1}: {len(paragraphs_seen)}/{total_paragraphs} paragraphs"
                     )
 
             logger.info(
@@ -700,7 +700,7 @@ class ShidianGujiAdapter(BaseSiteAdapter):
             ))
 
         # Generate title variants
-        title_variants = self._generate_title_variants(title)
+        title_variants = cjk_match.generate_title_variants(title)
         search_queries = list(dict.fromkeys(title_variants))[:3]
 
         # Search with each variant
@@ -718,7 +718,7 @@ class ShidianGujiAdapter(BaseSiteAdapter):
                     all_books.append(b)
             # If first query has exact title matches, skip variants
             if books and any(
-                self._title_matches(b.get("bookName", ""), title_variants)
+                cjk_match.title_matches(b.get("bookName", ""), title_variants)
                 for b in books
             ):
                 break
@@ -726,7 +726,7 @@ class ShidianGujiAdapter(BaseSiteAdapter):
         # Filter by exact title match
         candidates = [
             b for b in all_books
-            if self._title_matches(b.get("bookName", ""), title_variants)
+            if cjk_match.title_matches(b.get("bookName", ""), title_variants)
         ]
 
         if not candidates:
@@ -766,9 +766,9 @@ class ShidianGujiAdapter(BaseSiteAdapter):
             result_authors = self._extract_author_names(b.get("authors", []))
             if not result_authors:
                 author_matched.append(b)
-            elif self._author_matches(result_authors, authors):
+            elif cjk_match.author_matches(result_authors, authors):
                 author_matched.append(b)
-            elif self._surname_matches(result_authors, authors):
+            elif cjk_match.surname_matches(result_authors, authors):
                 surname_matched.append(b)
             else:
                 unmatched.append(b)
@@ -790,206 +790,6 @@ class ShidianGujiAdapter(BaseSiteAdapter):
             add_result(book_id, book_name, details, quality)
 
         return found
-
-    # ------------------------------------------------------------------
-    # Title / author matching helpers (shared with CText pattern)
-    # ------------------------------------------------------------------
-
-    @classmethod
-    def _get_s2t(cls):
-        if cls._s2t is None:
-            try:
-                from opencc import OpenCC
-                cls._s2t = OpenCC('s2t')
-            except ImportError:
-                return None
-        return cls._s2t
-
-    @classmethod
-    def _get_t2s(cls):
-        if cls._t2s is None:
-            try:
-                from opencc import OpenCC
-                cls._t2s = OpenCC('t2s')
-            except ImportError:
-                return None
-        return cls._t2s
-
-    @classmethod
-    def _get_variant_map(cls) -> dict[str, str]:
-        """Load CJK variant→standard character mapping from OpenCC dicts."""
-        if cls._variant_map is not None:
-            return cls._variant_map
-
-        import os
-        vmap: dict[str, str] = {}
-        try:
-            import opencc
-            dict_dir = os.path.join(os.path.dirname(opencc.__file__), 'dictionary')
-
-            jp_path = os.path.join(dict_dir, 'JPVariants.txt')
-            if os.path.exists(jp_path):
-                with open(jp_path, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        parts = line.strip().split('\t')
-                        if len(parts) == 2:
-                            std = parts[0]
-                            for v in parts[1].split(' '):
-                                if len(v) == 1 and len(std) == 1 and v != std:
-                                    vmap[v] = std
-
-            for fn in ('TWVariantsRev.txt', 'HKVariantsRev.txt'):
-                fp = os.path.join(dict_dir, fn)
-                if os.path.exists(fp):
-                    with open(fp, 'r', encoding='utf-8') as f:
-                        for line in f:
-                            parts = line.strip().split('\t')
-                            if len(parts) == 2:
-                                v = parts[0]
-                                std = parts[1].split(' ')[0]
-                                if len(v) == 1 and len(std) == 1 and v != std:
-                                    vmap[v] = std
-        except Exception:
-            pass
-
-        cls._variant_map = vmap
-        return vmap
-
-    @classmethod
-    def _normalize_variants(cls, text: str) -> str:
-        """Normalize CJK variant characters to standard traditional forms."""
-        vmap = cls._get_variant_map()
-        if vmap:
-            text = ''.join(vmap.get(ch, ch) for ch in text)
-        s2t = cls._get_s2t()
-        if s2t:
-            try:
-                text = s2t.convert(text)
-            except Exception:
-                pass
-        return text
-
-    def _generate_title_variants(self, title: str) -> list[str]:
-        """Generate CJK variant titles (simplified/traditional + variants)."""
-        variants: set[str] = {title}
-
-        s2t = self._get_s2t()
-        t2s = self._get_t2s()
-        if s2t:
-            try:
-                variants.add(s2t.convert(title))
-            except Exception:
-                pass
-        if t2s:
-            try:
-                variants.add(t2s.convert(title))
-            except Exception:
-                pass
-
-        # Removable prefixes common in Siku titles
-        removable = ['欽定', '御定', '御纂', '御製', '御選']
-        base_variants = set(variants)
-        for prefix in removable:
-            for v in base_variants:
-                if v.startswith(prefix):
-                    variants.add(v[len(prefix):])
-
-        return list(variants)
-
-    def _title_matches(
-        self, candidate: str, title_variants: list[str],
-    ) -> bool:
-        """Check if candidate title matches any of the title variants."""
-        norm_candidate = self._normalize_variants(candidate)
-        candidate_forms = {candidate, norm_candidate}
-        t2s = self._get_t2s()
-        if t2s:
-            try:
-                candidate_forms.add(t2s.convert(norm_candidate))
-            except Exception:
-                pass
-
-        norm_variants: set[str] = set(title_variants)
-        for v in title_variants:
-            norm_variants.add(self._normalize_variants(v))
-
-        for cf in candidate_forms:
-            for v in norm_variants:
-                if cf == v:
-                    return True
-        return False
-
-    def _author_matches(
-        self, result_authors: list[str], query_authors: list[str],
-    ) -> bool:
-        """Check if any result author matches any query author.
-
-        Handles role-word stripping, variant normalization, and
-        simplified↔traditional conversion.
-        """
-        result_forms: set[str] = set()
-        for ra in result_authors:
-            clean = self._ROLE_WORDS.sub('', ra)
-            norm = self._normalize_variants(clean)
-            result_forms.add(clean)
-            result_forms.add(norm)
-            t2s = self._get_t2s()
-            if t2s:
-                try:
-                    result_forms.add(t2s.convert(norm))
-                except Exception:
-                    pass
-
-        for qa in query_authors:
-            clean_qa = self._ROLE_WORDS.sub('', qa)
-            norm_qa = self._normalize_variants(clean_qa)
-            qa_forms = {clean_qa, norm_qa}
-            t2s = self._get_t2s()
-            if t2s:
-                try:
-                    qa_forms.add(t2s.convert(norm_qa))
-                except Exception:
-                    pass
-
-            for rf in result_forms:
-                for qf in qa_forms:
-                    if rf == qf:
-                        return True
-                    if qf in rf or rf in qf:
-                        return True
-        return False
-
-    def _surname_matches(
-        self, result_authors: list[str], query_authors: list[str],
-    ) -> bool:
-        """Check if result authors share a surname with any query author."""
-        result_surnames: set[str] = set()
-        for ra in result_authors:
-            clean = self._ROLE_WORDS.sub('', ra)
-            norm = self._normalize_variants(clean)
-            if norm:
-                result_surnames.add(norm[0])
-                t2s = self._get_t2s()
-                if t2s:
-                    try:
-                        result_surnames.add(t2s.convert(norm[0]))
-                    except Exception:
-                        pass
-
-        for qa in query_authors:
-            clean_qa = self._ROLE_WORDS.sub('', qa)
-            norm_qa = self._normalize_variants(clean_qa)
-            if norm_qa:
-                if norm_qa[0] in result_surnames:
-                    return True
-                t2s = self._get_t2s()
-                if t2s:
-                    try:
-                        if t2s.convert(norm_qa[0]) in result_surnames:
-                            return True
-                    except Exception:
-                        pass
-        return False
 
     # ------------------------------------------------------------------
 

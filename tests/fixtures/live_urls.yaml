@@ -1,0 +1,127 @@
+# Real, working item URLs for the OPT-IN live download-path tests.
+#
+# These hit the actual sites, so they are marked `live` and deselected by
+# default. Run them explicitly to confirm download still works end-to-end:
+#     pytest -m live tests/test_live_download.py
+#
+# Each item exercises the full path: extract_book_id -> get_metadata ->
+# get_image_list (kind: images) or get_structured_text (kind: text).
+# Only network-reachable sites without login/captcha are listed here;
+# Playwright/cookie/IP-gated sites (shidianguji, ncl_rbook, read.nlc.cn,
+# guji.nlc.cn, hanchi) are exercised by their own dedicated/live tests.
+
+items:
+  # --- IIIF image sites ---
+  - site_id: bodleian
+    url: "https://digital.bodleian.ox.ac.uk/objects/60834383-7146-41ab-bfe1-48ee97bc04be/"
+    kind: images
+    min_images: 100
+    title_contains: "Bodl"
+
+  - site_id: vatican
+    url: "https://digi.vatlib.it/view/MSS_Vat.lat.3773"
+    kind: images
+    min_images: 50
+
+  - site_id: cambridge_cudl
+    url: "https://cudl.lib.cam.ac.uk/view/MS-NN-00002-00041"
+    kind: images
+    min_images: 10
+
+  - site_id: ndl
+    url: "https://dl.ndl.go.jp/pid/2592420"
+    kind: images
+    min_images: 1
+    title_contains: "平妖傳"
+
+  # bnf_gallica: covered by offline routing + test_manifest_url. To add a live
+  # entry, pin a VERIFIED real ark whose manifest resolves, e.g.
+  #   https://gallica.bnf.fr/iiif/ark:/12148/<real-ark>/manifest.json
+  # (the placeholder ark btv1b9006423x returns HTTP 500 — not a real document).
+
+  - site_id: bsb
+    url: "https://www.digitale-sammlungen.de/de/view/bsb00023986"
+    kind: images
+    min_images: 1
+
+  - site_id: berlin_sbb
+    url: "https://digital.staatsbibliothek-berlin.de/werkansicht?PPN=PPN610311271"
+    kind: images
+    min_images: 100
+    title_contains: "Hanlin"
+
+  - site_id: smithsonian
+    url: "https://ids.si.edu/ids/manifest/FS-F1904.61_006"
+    kind: images
+    min_images: 1
+
+  - site_id: emuseum
+    url: "https://emuseum.nich.go.jp/detail?content_base_id=100769&content_part_id=000&content_pict_id=000"
+    kind: images
+    min_images: 10
+
+  - site_id: khirin
+    url: "https://khirin-a.rekihaku.ac.jp/nmjh_nishikie/h-22-1-1-1"
+    kind: images
+    min_images: 1
+
+  - site_id: hkust
+    url: "https://lbezone.hkust.edu.hk/bib/b334647"
+    kind: images
+    min_images: 10
+
+  - site_id: taiwan_ebook
+    url: "https://taiwanebook.ncl.edu.tw/zh-tw/book/NTUL-9910009002"
+    kind: images          # get_image_list returns the book's PDF file(s)
+    min_images: 1
+    title_contains: "宋史"
+
+  - site_id: loc
+    url: "https://www.loc.gov/item/2006457689/"
+    kind: images
+    min_images: 50
+    title_contains: "Dao gu"
+
+  - site_id: onb
+    url: "https://viewer.onb.ac.at/ABO_+Z201494000"
+    kind: images
+    min_images: 100
+
+  - site_id: keio
+    url: "https://dcollections.lib.keio.ac.jp/ja/kanseki/110x-24-1"
+    kind: images
+    min_images: 1
+
+  - site_id: ryukoku
+    url: "https://da.library.ryukoku.ac.jp/page/220901"
+    kind: images
+    min_images: 50
+    title_contains: "春秋左伝"
+
+  - site_id: toyobunko
+    url: "https://dsr.nii.ac.jp/toyobunko/XI-6-A-16/V-1/"
+    kind: images
+    min_images: 10
+    title_contains: "圓明園"
+
+  - site_id: tnm
+    url: "https://webarchives.tnm.jp/dlib/detail/615"
+    kind: tiled          # Zoomify tiles — stitches the first page end-to-end
+    min_images: 10
+
+  - site_id: kokusho
+    url: "https://kokusho.nijl.ac.jp/biblio/100250746"
+    kind: images
+    min_images: 10
+    # title comes from the manifest label in kyūjitai (總葉槪錄); the metadata
+    # Title field uses shinjitai (総葉概録). Skip title_contains to avoid the
+    # variant mismatch — non-empty title is still asserted.
+
+  # --- Text sites ---
+  - site_id: ctext
+    url: "https://ctext.org/analects/xue-er"
+    kind: text
+
+  - site_id: wikisource
+    url: "https://zh.wikisource.org/wiki/論語/學而第一"
+    kind: text

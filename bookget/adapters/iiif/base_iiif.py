@@ -84,7 +84,9 @@ class BaseIIIFAdapter(BaseSiteAdapter):
         try:
             async with session.get(url, headers=headers) as response:
                 response.raise_for_status()
-                return await response.json()
+                # content_type=None: some servers send manifests as text/html
+                # or text/plain; don't let aiohttp's strict mimetype check fail.
+                return await response.json(content_type=None)
         except Exception as e:
             logger.error(f"Failed to fetch manifest: {e}")
             raise MetadataExtractionError(f"Failed to fetch IIIF manifest: {e}")
@@ -158,12 +160,20 @@ class BaseIIIFAdapter(BaseSiteAdapter):
             # Language map
             if "@value" in value:
                 return value["@value"]
-            # Try common language keys
-            for lang in ["zh", "en", "ja", "und"]:
+            # IIIF v3 language map: values are lists, e.g. {"none": ["text"]}.
+            # IIIF v2 language map: values are strings, e.g. {"en": "text"}.
+            for lang in ["zh", "zh-Hant", "zh-Hans", "en", "ja",
+                         "none", "und", "de"]:
                 if lang in value:
-                    return value[lang]
-            # Return first value
-            return str(next(iter(value.values()), ""))
+                    v = value[lang]
+                    if isinstance(v, list):
+                        return v[0] if v else ""
+                    return v
+            # Fallback: first value (may be a string or a v3 list)
+            first = next(iter(value.values()), "")
+            if isinstance(first, list):
+                return first[0] if first else ""
+            return str(first) if first else ""
         return str(value) if value else ""
     
     async def get_image_list(self, book_id: str) -> List[Resource]:
@@ -179,9 +189,12 @@ class BaseIIIFAdapter(BaseSiteAdapter):
         manifest -> sequences[0] -> canvases[] -> images[0] -> resource
         """
         resources = []
-        
+
         sequences = manifest.get("sequences", [])
         if not sequences:
+            # IIIF Presentation v3: canvases live in manifest.items[]
+            if manifest.get("items"):
+                return self._parse_manifest_images_v3(manifest)
             logger.warning("No sequences found in manifest")
             return resources
         
@@ -228,9 +241,58 @@ class BaseIIIFAdapter(BaseSiteAdapter):
                 height=height,
             )
             resources.append(resource)
-        
+
         return resources
-    
+
+    def _parse_manifest_images_v3(self, manifest: dict) -> List[Resource]:
+        """Parse images from a IIIF Presentation v3 manifest.
+
+        Structure: manifest.items[] (Canvas) → items[] (AnnotationPage)
+        → items[] (Annotation) → body (Image, with an ImageService3 service).
+        """
+        resources: List[Resource] = []
+        size = self.iiif_size
+        if size == "full":
+            size = "max"  # v3 image API uses "max", not "full"
+
+        for idx, canvas in enumerate(manifest.get("items", [])):
+            page_label = self._extract_label(canvas.get("label", ""))
+            anno_pages = canvas.get("items", [])
+            if not anno_pages:
+                continue
+            annos = anno_pages[0].get("items", [])
+            if not annos:
+                continue
+            body = annos[0].get("body", {})
+            if isinstance(body, list):
+                body = body[0] if body else {}
+
+            service = body.get("service", [])
+            if isinstance(service, dict):
+                service = [service]
+            service_id = ""
+            if service:
+                service_id = service[0].get("id") or service[0].get("@id", "")
+
+            if service_id:
+                image_url = f"{service_id}/full/{size}/0/default.jpg"
+            else:
+                image_url = body.get("id", "")
+            if not image_url:
+                continue
+
+            resources.append(Resource(
+                url=image_url,
+                resource_type=ResourceType.IMAGE,
+                order=idx + 1,
+                page=page_label or str(idx + 1),
+                iiif_service_id=service_id,
+                width=canvas.get("width", 0),
+                height=canvas.get("height", 0),
+            ))
+
+        return resources
+
     async def download_node(
         self,
         book_id: str,

@@ -274,6 +274,7 @@ class TestCTextAdapter:
             "https://ctext.org/wiki.pl?if=gb&chapter=3658735")
         assert book_id == "wiki-chapter:3658735"
 
+    @pytest.mark.live
     @pytest.mark.asyncio
     async def test_get_text_content(self):
         from bookget.adapters.other.ctext import CTextAdapter
@@ -291,6 +292,7 @@ class TestCTextAdapter:
         finally:
             await adapter.close()
 
+    @pytest.mark.live
     @pytest.mark.asyncio
     async def test_get_metadata(self):
         from bookget.adapters.other.ctext import CTextAdapter
@@ -306,6 +308,7 @@ class TestCTextAdapter:
         finally:
             await adapter.close()
 
+    @pytest.mark.live
     @pytest.mark.asyncio
     async def test_get_library_images(self):
         from bookget.adapters.other.ctext import CTextAdapter
@@ -653,47 +656,39 @@ class TestBSBAdapter:
         assert not BayerischeStaatsbibliothekAdapter.can_handle("https://ctext.org/analects")
 
 
-class TestNCLTaiwanAdapter:
-    """Tests for NCL Taiwan adapter."""
+class TestNCLRbookAdapter:
+    """Tests for NCL Taiwan (rbook.ncl.edu.tw) adapter.
 
-    def test_extract_book_id_path(self):
-        from bookget.adapters.other.taiwan import NCLTaiwanAdapter
+    The legacy IIIF-based NCLTaiwanAdapter was replaced by the Playwright-based
+    NCLRbookAdapter (site_id "ncl_rbook"). These cover offline URL routing.
+    """
 
-        adapter = NCLTaiwanAdapter()
-        book_id = adapter.extract_book_id(
-            "https://rbook.ncl.edu.tw/ncltwcatchtitle/123456"
-        )
-        assert book_id == "123456"
+    def test_extract_book_id_search_detail(self):
+        from bookget.adapters.other.ncl_rbook import NCLRbookAdapter
 
-    def test_extract_book_id_query_param(self):
-        from bookget.adapters.other.taiwan import NCLTaiwanAdapter
-
-        adapter = NCLTaiwanAdapter()
-        book_id = adapter.extract_book_id(
-            "https://rbook2.ncl.edu.tw/viewer?id=789"
-        )
-        assert book_id == "789"
+        adapter = NCLRbookAdapter()
+        url = "https://rbook.ncl.edu.tw/NCLSearch/Search/SearchDetail?item=abc123"
+        book_id = adapter.extract_book_id(url)
+        assert book_id.startswith("ncltw_")
+        # md5[:16] → stable 16-hex suffix, deterministic for the same URL
+        assert len(book_id) == len("ncltw_") + 16
+        assert adapter.extract_book_id(url) == book_id
 
     def test_extract_book_id_invalid(self):
-        from bookget.adapters.other.taiwan import NCLTaiwanAdapter
+        from bookget.adapters.other.ncl_rbook import NCLRbookAdapter
+        from bookget.exceptions import MetadataExtractionError
 
-        adapter = NCLTaiwanAdapter()
-        with pytest.raises(ValueError):
+        adapter = NCLRbookAdapter()
+        with pytest.raises(MetadataExtractionError):
             adapter.extract_book_id("https://rbook.ncl.edu.tw/")
 
-    def test_manifest_url(self):
-        from bookget.adapters.other.taiwan import NCLTaiwanAdapter
-
-        adapter = NCLTaiwanAdapter()
-        url = adapter.get_manifest_url("123456")
-        assert url == "https://rbook.ncl.edu.tw/iiif/ncltwcatchtitle/123456/manifest"
-
     def test_can_handle(self):
-        from bookget.adapters.other.taiwan import NCLTaiwanAdapter
+        from bookget.adapters.other.ncl_rbook import NCLRbookAdapter
 
-        assert NCLTaiwanAdapter.can_handle("https://rbook.ncl.edu.tw/ncltwcatchtitle/123")
-        assert NCLTaiwanAdapter.can_handle("https://rbook2.ncl.edu.tw/viewer?id=456")
-        assert not NCLTaiwanAdapter.can_handle("https://ctext.org/analects")
+        assert NCLRbookAdapter.can_handle(
+            "https://rbook.ncl.edu.tw/NCLSearch/Search/SearchDetail?item=1")
+        assert NCLRbookAdapter.can_handle("https://rbook2.ncl.edu.tw/x")
+        assert not NCLRbookAdapter.can_handle("https://ctext.org/analects")
 
 
 class TestPalaceMuseumTaipeiAdapter:
@@ -777,12 +772,12 @@ class TestAdapterRegistryComprehensive:
         assert adapter_class is not None
         assert adapter_class.site_id == "bsb"
 
-    def test_get_for_url_ncl_taiwan(self):
+    def test_get_for_url_ncl_rbook(self):
         adapter_class = AdapterRegistry.get_for_url(
-            "https://rbook.ncl.edu.tw/ncltwcatchtitle/123"
+            "https://rbook.ncl.edu.tw/NCLSearch/Search/SearchDetail?item=1"
         )
         assert adapter_class is not None
-        assert adapter_class.site_id == "ncl_taiwan"
+        assert adapter_class.site_id == "ncl_rbook"
 
     def test_get_for_url_npm_taipei(self):
         adapter_class = AdapterRegistry.get_for_url(

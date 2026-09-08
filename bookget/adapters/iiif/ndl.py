@@ -90,22 +90,31 @@ class NDLAdapter(BaseIIIFAdapter):
         # PID
         metadata.source_id = item.get("itemId", book_id)
         
-        # Title - stored in various meta fields
-        # 0311Dtct is title in katakana, we need the original
-        title_fields = ["0200Dod", "0101Dod", "0042Dtct"]
+        # Title - stored in various meta fields. 0001Dtct is the primary
+        # title (e.g. "平妖傳8卷40回"); 0311Dtct is its katakana reading.
+        title_fields = ["0001Dtct", "0200Dod", "0101Dod", "0042Dtct"]
         for field in title_fields:
             if field in meta:
                 values = meta[field]
                 if values:
                     metadata.title = values[0] if isinstance(values, list) else values
                     break
-        
+        # Last resort: katakana reading so the title is never empty
+        if not metadata.title and meta.get("0311Dtct"):
+            kana = meta["0311Dtct"]
+            metadata.title = kana[0] if isinstance(kana, list) else kana
+
         # Creators - in 0010Dtct
         creators = meta.get("0010Dtct", [])
         if isinstance(creators, list):
             for c in creators:
                 if c:
                     metadata.creators.append(Creator(name=c))
+
+        # Classification (四部分类) - in 0022Dtct, e.g. "集部/小説類/章回小説之屬"
+        category = meta.get("0022Dtct", [])
+        if category:
+            metadata.category = category[0] if isinstance(category, list) else category
         
         # Publication info - in 0058Dod
         pub_info = meta.get("0058Dod", [])

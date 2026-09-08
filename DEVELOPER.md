@@ -157,6 +157,31 @@ class MyAdapter(BaseSiteAdapter):
 | `discover_structure()` | 自定义结构发现逻辑 |
 | `download_node()` | 自定义节点下载逻辑 |
 
+## 测试策略
+
+下载功能依赖外部站点（部分需 Playwright/cookie/IP），不能全靠真连站点跑 CI。测试分三层：
+
+| 层 | 文件 | 联网 | 默认跑 | 作用 |
+|----|------|:----:|:------:|------|
+| L1 路由 / ID 抽取 | `tests/test_site_routing.py` + `tests/fixtures/site_urls.yaml` | 否 | ✅ | 每站多个 URL 形态都路由到正确适配器、`extract_book_id` 非空 |
+| L2 适配器单元 | `tests/test_adapters.py` 等 | 否 | ✅ | `extract_book_id`、`_parse_metadata`、manifest URL 等纯逻辑 |
+| L3 真连下载路径 | `tests/test_live_download.py` + `tests/fixtures/live_urls.yaml` | 是 | ❌ | 真打站点跑 extract→metadata→images/text，确认下载没坏 |
+
+```bash
+pytest                      # 默认：只跑离线层（快、确定、CI 安全）
+pytest -m live              # 只跑真连层（手动/定时，验证下载功能）
+pytest -m live tests/test_live_download.py -v   # 逐站看
+```
+
+- `live` 标记的测试由 `pyproject.toml` 的 `addopts = "-m 'not live'"` 默认排除。
+- **新增适配器时**：
+  1. **必须**在 `site_urls.yaml` 给该 `site_id` 加 ≥1 个 URL（最好多个形态）。`test_site_routing.py` 有覆盖率守卫——漏登记会直接失败。
+  2. **建议**在 `live_urls.yaml` 加一条**真实可用**的 URL（先本地 `pytest -m live` 验证通过再提交）。Playwright/cookie/IP-gated 站点（识典、ncl_rbook、read.nlc.cn、guji.nlc.cn、hanchi）不放 live_urls，用各自的专用测试。
+- L1 的多 URL 形态曾抓出真实 bug：通用 IIIF 适配器会"截胡"任意 `*manifest*.json` URL——已在 `registry.get_for_url` 修复（域名专属适配器优先于无域名的 catch-all）。
+- L3 也抓出真实 bug：NDL 元数据漏了主标题字段 `0001Dtct`——已修。
+
+> L2 可进一步加「录制真实 manifest/API 响应到 `tests/fixtures/` → 离线解析断言图片数/标题」的子层（cassette 式），对网络不可达但解析逻辑关键的站点尤其有用，按需补。
+
 ## 结构化文本
 
 文本解析器将网页内容转为统一的 `StructuredText` 格式：

@@ -265,29 +265,34 @@ class TestParseContentPage:
         assert len(paras) == 1
         assert "尋(贅)還(補)遷" in paras[0]
 
-    def test_unknown_gif_raises_error(self):
-        """Unknown editorial GIF icons should raise AdapterError."""
-        from bookget.exceptions import AdapterError
+    def test_unknown_gif_tolerated(self):
+        """Unknown editorial GIF icons are tolerated: logged as a warning and
+        kept inline as a literal "(qX.gif)" marker rather than raising."""
         html = '''
         <a class=gobookmark>明實錄(P.1)</a>
         <SPAN id=fontstyle>
         <div>文字<img src=/mql/hanjishiluimg/qz.gif>繼續</div>
         </SPAN>
         '''
-        with pytest.raises(AdapterError, match="未知的 Hanchi 校勘图标"):
-            HanchiAdapter._parse_content_page(html)
+        result = HanchiAdapter._parse_content_page(html)
+        paras = self._get_all_paragraphs(result)
+        assert len(paras) == 1
+        assert "(qz.gif)" in paras[0]
+        assert "文字" in paras[0] and "繼續" in paras[0]
 
-    def test_unknown_span_content_raises_error(self):
-        """Span with unknown content format should raise AdapterError."""
-        from bookget.exceptions import AdapterError
+    def test_unknown_span_content_tolerated(self):
+        """Any <span id=qN> is tolerated and converted to a 【…】 marker,
+        even when the inner text has no recognizable format (no colon)."""
         html = '''
         <a class=gobookmark>明實錄(P.1)</a>
         <SPAN id=fontstyle>
         <div>文字<span id=q99>未知格式無冒號</span>繼續</div>
         </SPAN>
         '''
-        with pytest.raises(AdapterError, match="未知的 Hanchi 校勘 span"):
-            HanchiAdapter._parse_content_page(html)
+        result = HanchiAdapter._parse_content_page(html)
+        paras = self._get_all_paragraphs(result)
+        assert len(paras) == 1
+        assert "【未知格式無冒號】" in paras[0]
 
     def test_unknown_img_raises_error(self):
         """Any remaining <img> tag after processing should raise AdapterError."""
@@ -679,6 +684,7 @@ class TestHanchiParser:
 # HanchiAdapter — live integration tests (require network)
 # =====================================================================
 
+@pytest.mark.live
 @pytest.mark.asyncio
 class TestHanchiLiveIntegration:
     """Live tests against the actual Hanchi server.

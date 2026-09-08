@@ -12,38 +12,9 @@ from ...logger import logger
 from ...exceptions import MetadataExtractionError
 
 
-@AdapterRegistry.register
-class NCLTaiwanAdapter(BaseIIIFAdapter):
-    """
-    Adapter for 國家圖書館 (National Central Library, Taiwan).
-    
-    Home to important Chinese rare book collections evacuated from mainland.
-    
-    URL patterns:
-    - Detail: https://rbook.ncl.edu.tw/ncltwcatchtitle/{id}
-    - IIIF: varies
-    """
-    
-    site_name = "臺灣國家圖書館 (NCL Taiwan)"
-    site_id = "ncl_taiwan"
-    site_domains = ["rbook.ncl.edu.tw", "rbook2.ncl.edu.tw"]
-    
-    supports_iiif = True
-    
-    def extract_book_id(self, url: str) -> str:
-        """Extract book ID from Taiwan NCL URL."""
-        match = re.search(r'/ncltwcatchtitle/(\d+)', url)
-        if match:
-            return match.group(1)
-        
-        match = re.search(r'[?&]id=(\d+)', url)
-        if match:
-            return match.group(1)
-        
-        raise ValueError(f"Could not extract book ID from URL: {url}")
-    
-    def get_manifest_url(self, book_id: str) -> str:
-        return f"https://rbook.ncl.edu.tw/iiif/ncltwcatchtitle/{book_id}/manifest"
+# NCL Taiwan rbook 適配器已搬到 other/ncl_rbook.py（新版 NCLSearch URL +
+# Playwright headed + 私有 token chain）。舊的 IIIF 假設不成立（rbook.ncl.edu.tw
+# 沒有 IIIF endpoint），故刪除。
 
 
 @AdapterRegistry.register 

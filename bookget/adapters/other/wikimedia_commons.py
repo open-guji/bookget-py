@@ -12,25 +12,9 @@ from ..registry import AdapterRegistry
 from ...models.book import BookMetadata, Resource, ResourceType, Creator
 from ...models.search import SearchResult, SearchResponse, MatchedResource
 from ...text_parsers.base import StructuredText
+from ...shared import cjk_match
 from ...logger import logger
 from ...exceptions import MetadataExtractionError, DownloadError
-
-
-# CJK 字符变体映射（简繁等常见替换）
-_CJK_VARIANTS: dict[str, str] = {
-    '注': '註', '註': '注',
-    '于': '於', '於': '于',
-    '余': '餘', '餘': '余',
-    '云': '雲', '雲': '云',
-    '丰': '豐', '豐': '丰',
-    '后': '後', '後': '后',
-    '志': '誌', '誌': '志',
-    '谷': '穀', '穀': '谷',
-    '历': '歷', '歷': '历',
-    '钟': '鐘', '鐘': '钟',
-    '制': '製', '製': '制',
-    '面': '麵', '麵': '面',
-}
 
 
 @AdapterRegistry.register
@@ -623,8 +607,8 @@ class WikimediaCommonsAdapter(BaseSiteAdapter):
                 details=details,
             ))
 
-        # Step 1: generate title variants
-        title_variants = self._generate_title_variants(title)
+        # Step 1: generate title variants (shared 繁简/异体 normalization)
+        title_variants = cjk_match.generate_title_variants(title)
 
         # Step 2: search for matching files (DjVu + PDF)
         search_queries = []
@@ -700,18 +684,6 @@ class WikimediaCommonsAdapter(BaseSiteAdapter):
         return found
 
     # -- match_book helpers --
-
-    def _generate_title_variants(self, title: str) -> list[str]:
-        """Generate CJK variant titles (single-char substitutions)."""
-        variants: set[str] = {title}
-
-        # Single-char variant substitutions
-        for i, ch in enumerate(title):
-            alt = _CJK_VARIANTS.get(ch)
-            if alt:
-                variants.add(title[:i] + alt + title[i + 1:])
-
-        return list(variants)
 
     async def _search_files(self, query: str, limit: int = 20) -> list[dict]:
         """Search File namespace on Commons.

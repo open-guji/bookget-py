@@ -53,12 +53,22 @@ class AdapterRegistry:
             Adapter class or None if no adapter found
         """
         cls._ensure_initialized()
-        
+
+        # Prefer domain-specific adapters over structural catch-alls.
+        # GenericIIIFAdapter (site_domains == []) matches any "*manifest*.json"
+        # URL via can_handle; without this priority it would steal manifest
+        # URLs that actually belong to a specific site (e.g. a Bodleian or
+        # Vatican IIIF manifest), bypassing that site's metadata parsing.
+        fallback = None
         for adapter_class in cls._adapters.values():
-            if adapter_class.can_handle(url):
+            if not adapter_class.can_handle(url):
+                continue
+            if adapter_class.site_domains:
                 return adapter_class
-        
-        return None
+            if fallback is None:
+                fallback = adapter_class
+
+        return fallback
     
     @classmethod
     def list_adapters(cls) -> List[Dict[str, str]]:

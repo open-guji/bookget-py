@@ -217,11 +217,30 @@ class TestShidianGujiParser:
     def setup_method(self):
         self.parser = ShidianGujiParser()
 
+    @staticmethod
+    def _para(chapter_id, in_order, chapter_order, *line_texts):
+        """Build a paragraphs/v2-shaped paragraph dict (content is a JSON string
+        of {"lines": [{"content": ...}]})."""
+        import json as _json
+        return {
+            "chapterId": chapter_id,
+            "inChapterOrder": in_order,
+            "chapterOrder": chapter_order,
+            "content": _json.dumps(
+                {"lines": [{"lineType": 1, "content": t} for t in line_texts]}
+            ),
+        }
+
     def test_parse_single_chapter(self):
-        chapter_list = [
-            {"id": "1", "title": "卷一", "content": "天地玄黃\n宇宙洪荒"},
+        paragraphs = [
+            self._para("c1", 1, 1, "天地玄黃"),
+            self._para("c1", 2, 1, "宇宙洪荒"),
         ]
-        st = self.parser.parse(chapter_list, "book123", "https://www.shidianguji.com/book/book123")
+        meta = {"title": "千字文", "catalog": [{"chapterId": "c1", "title": "卷一"}]}
+        st = self.parser.parse(
+            paragraphs, "book123",
+            "https://www.shidianguji.com/book/book123", meta,
+        )
 
         assert st.content_type == "single_chapter"
         assert len(st.chapters) == 1
@@ -230,33 +249,51 @@ class TestShidianGujiParser:
         assert st.chapters[0]["order"] == 1
 
     def test_parse_multiple_chapters(self):
-        chapter_list = [
-            {"id": "1", "title": "卷一", "content": "第一段\n第二段"},
-            {"id": "2", "title": "卷二", "content": "第三段"},
-            {"id": "3", "title": "卷三", "content": "第四段\n第五段\n第六段"},
+        paragraphs = [
+            self._para("c1", 1, 1, "第一段"),
+            self._para("c1", 2, 1, "第二段"),
+            self._para("c2", 1, 2, "第三段"),
+            self._para("c3", 1, 3, "第四段"),
+            self._para("c3", 2, 3, "第五段"),
+            self._para("c3", 3, 3, "第六段"),
         ]
-        meta = {"title": "千字文", "author": "周兴嗣", "dynasty": "南梁", "category": "蒙学"}
+        meta = {
+            "title": "千字文",
+            "authors_json": '[{"name": "周兴嗣", "role": "撰"}]',
+            "dynasty": "南梁",
+            "catalog": [
+                {"chapterId": "c1", "title": "卷一"},
+                {"chapterId": "c2", "title": "卷二"},
+                {"chapterId": "c3", "title": "卷三"},
+            ],
+        }
         st = self.parser.parse(
-            chapter_list, "book456",
-            "https://www.shidianguji.com/book/book456", meta
+            paragraphs, "book456",
+            "https://www.shidianguji.com/book/book456", meta,
         )
 
         assert st.content_type == "book_with_chapters"
         assert st.title == "千字文"
-        assert st.metadata["authors"] == [{"name": "周兴嗣"}]
+        assert st.metadata["authors"] == [{"name": "周兴嗣", "role": "撰"}]
         assert st.metadata["dynasty"] == "南梁"
-        assert st.metadata["category"] == "蒙学"
         assert len(st.chapters) == 3
         assert st.chapters[0]["paragraphs"] == ["第一段", "第二段"]
         assert st.chapters[2]["paragraphs"] == ["第四段", "第五段", "第六段"]
 
     def test_parse_skips_empty_content(self):
-        chapter_list = [
-            {"id": "1", "title": "卷一", "content": "有内容"},
-            {"id": "2", "title": "卷二", "content": ""},
-            {"id": "3", "title": "卷三", "content": "也有内容"},
+        paragraphs = [
+            self._para("c1", 1, 1, "有内容"),
+            self._para("c2", 1, 2),                 # no lines → empty → skipped
+            self._para("c3", 1, 3, "也有内容"),
         ]
-        st = self.parser.parse(chapter_list, "book789", "https://example.com")
+        meta = {
+            "catalog": [
+                {"chapterId": "c1", "title": "卷一"},
+                {"chapterId": "c2", "title": "卷二"},
+                {"chapterId": "c3", "title": "卷三"},
+            ],
+        }
+        st = self.parser.parse(paragraphs, "book789", "https://example.com", meta)
 
         assert len(st.chapters) == 2
         assert st.chapters[0]["title"] == "卷一"

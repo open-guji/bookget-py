@@ -30,9 +30,13 @@ dev = [
     "pytest>=7.0",
     "build>=1.0",
     "ruff>=0.4",
+    "pyyaml>=6.0",
 ]
 browser = [
     "playwright>=1.40",
+]
+tiles = [
+    "Pillow>=10.0",  # stitching Zoomify/DeepZoom tiled images (e.g. TNM)
 ]
 
 [project.scripts]
@@ -42,3 +46,13 @@ bookget = "bookget.main:_safe_main"
 where = ["."]
 include = ["bookget*"]
 exclude = ["tests*", "doc*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+# Live tests hit real external sites and are deselected by default so the
+# normal suite stays offline, fast and deterministic. Run them explicitly with:
+#     pytest -m live
+addopts = "-m 'not live'"
+markers = [
+    "live: hits real external sites/network (deselected by default; run with `pytest -m live`)",
+]

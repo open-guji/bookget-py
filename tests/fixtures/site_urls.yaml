@@ -1,0 +1,202 @@
+# Example URLs for offline smoke-testing of adapter URL routing + ID extraction.
+#
+# Each site lists SEVERAL URL shapes (detail page, reader/viewer, manifest,
+# with page/volume suffix, alternate domain, …) so the smoke test guards that
+# every real-world entry-point routes to the right adapter and yields a
+# non-empty book id. No network is used here — only routing + extract_book_id.
+#
+# Sources: bookget Wiki 04/05, each adapter's docstring, and existing tests.
+# When adding an adapter, append an entry; the coverage-guard test enforces it.
+
+sites:
+  # ----------------------------- IIIF -----------------------------
+  - site_id: harvard
+    urls:
+      - "https://curiosity.lib.harvard.edu/chinese-rare-books/catalog/49-990096027880203941"
+      - "https://iiif.lib.harvard.edu/manifests/drs:49423904"
+
+  - site_id: princeton
+    urls:
+      - "https://dpul.princeton.edu/eastasian/catalog/coffee-table-123"
+      - "https://figgy.princeton.edu/concern/scanned_resources/abc123/manifest"
+
+  - site_id: stanford
+    urls:
+      - "https://searchworks.stanford.edu/view/bb123cd4567"
+      - "https://purl.stanford.edu/wd297xz1362"
+
+  - site_id: berkeley
+    urls:
+      - "https://digicoll.lib.berkeley.edu/record/12345"
+
+  - site_id: ndl
+    urls:
+      - "https://dl.ndl.go.jp/pid/2592420"
+      - "https://dl.ndl.go.jp/pid/2592420/1/5"
+      - "https://dl.ndl.go.jp/info:ndljp/pid/2592420"
+
+  - site_id: kyoto_rmda
+    urls:
+      - "https://rmda.kulib.kyoto-u.ac.jp/item/rb00012345"
+
+  - site_id: bodleian
+    urls:
+      - "https://digital.bodleian.ox.ac.uk/objects/60834383-7146-41ab-bfe1-48ee97bc04be/"
+      - "https://iiif.bodleian.ox.ac.uk/iiif/manifest/60834383-7146-41ab-bfe1-48ee97bc04be.json"
+
+  - site_id: vatican
+    urls:
+      - "https://digi.vatlib.it/view/MSS_Vat.lat.3773"
+      - "https://digi.vatlib.it/iiif/MSS_Vat.lat.3773/manifest.json"
+
+  - site_id: cambridge_cudl
+    urls:
+      - "https://cudl.lib.cam.ac.uk/view/MS-NN-00002-00041"
+      - "https://cudl.lib.cam.ac.uk/view/MS-NN-00002-00041/1"
+      - "https://cudl.lib.cam.ac.uk/iiif/MS-NN-00002-00041"
+
+  - site_id: kokusho
+    urls:
+      - "https://kokusho.nijl.ac.jp/biblio/100250746"
+      - "https://kokusho.nijl.ac.jp/biblio/100250746/1?ln=ja"
+      - "https://kokusho.nijl.ac.jp/app/mirador/100250746/1/1"
+      - "https://kokusho.nijl.ac.jp/biblio/100250746/manifest"
+
+  - site_id: emuseum
+    urls:
+      - "https://emuseum.nich.go.jp/detail?langId=ja&content_base_id=100817&content_part_id=443&content_pict_id=0"
+      - "https://emuseum.nich.go.jp/detail?content_base_id=100511&content_pict_id=0"
+      - "https://emuseum.nich.go.jp/iiifapi/100817443000/manifest.json"
+
+  - site_id: khirin
+    urls:
+      - "https://khirin-a.rekihaku.ac.jp/nmjh_nishikie/h-22-1-1-1"
+      - "https://khirin-a.rekihaku.ac.jp/manifests/nishikie/H-22-1-1-1.json"
+
+  - site_id: keio
+    urls:
+      - "https://dcollections.lib.keio.ac.jp/ja/kanseki/110x-24-1"
+      - "https://dcollections.lib.keio.ac.jp/sites/default/files/iiif/KAN/110X-24-1/manifest.json"
+
+  - site_id: ryukoku
+    urls:
+      - "https://da.library.ryukoku.ac.jp/page/220901"
+      - "https://da.library.ryukoku.ac.jp/iiif/220901/1/manifest.json"
+
+  - site_id: toyobunko
+    urls:
+      - "https://dsr.nii.ac.jp/toyobunko/XI-6-A-16/V-1/"
+      - "https://dsr.nii.ac.jp/toyobunko/XI-6-A-16/V-1/manifest.json"
+
+  # ----------------------- Europe (IIIF/custom) -----------------------
+  - site_id: berlin_sbb
+    urls:
+      - "https://digital.staatsbibliothek-berlin.de/werkansicht?PPN=PPN610311271&PHYSID=PHYS_0046"
+      - "https://content.staatsbibliothek-berlin.de/dc/PPN610311271/manifest"
+
+  - site_id: bnf_gallica
+    urls:
+      - "https://gallica.bnf.fr/ark:/12148/btv1b9006423x"
+      - "https://gallica.bnf.fr/ark:/12148/btv1b9006423x/f5.item"
+
+  - site_id: british_library
+    urls:
+      - "https://www.bl.uk/manuscripts/Viewer.aspx?ref=or_8210_p2"
+      - "https://www.bl.uk/items/diamond-sutra"
+
+  - site_id: bsb
+    urls:
+      - "https://www.digitale-sammlungen.de/de/view/bsb00023986"
+
+  - site_id: onb
+    urls:
+      - "https://viewer.onb.ac.at/ABO_+Z201494000"
+      - "https://viewer.onb.ac.at/redirect-hinweis/ABO_+Z201494000"
+      - "https://digital.onb.ac.at/OnbViewer/viewer.faces?doc=ABO_+Z201494000"
+      - "https://api.onb.ac.at/iiif/presentation/v3/manifest/ABO_+Z201494000"
+
+  - site_id: smithsonian
+    urls:
+      - "https://ids.si.edu/ids/manifest/FS-F1904.61_006"
+
+  - site_id: hku
+    urls:
+      - "https://digitalrepository.lib.hku.hk/catalog/6q188b14n"
+      - "https://digitalrepository.lib.hku.hk/service/api/iiif/manifest/6q188b14n"
+
+  - site_id: hkust
+    urls:
+      - "https://lbezone.hkust.edu.hk/bib/b334647"
+
+  - site_id: taiwan_ebook
+    urls:
+      - "https://taiwanebook.ncl.edu.tw/zh-tw/book/NTUL-9910009002"
+      - "https://taiwanebook.ncl.edu.tw/zh-tw/book/NTUL-9910009002/reader"
+
+  # --------------------------- China mainland ---------------------------
+  - site_id: nlc_guji
+    urls:
+      - "https://guji.nlc.cn/guji/pjkf/detail?metadataId=0021001379780000"
+      - "https://guji.nlc.cn/resource/resourceDetail?id=1001254"
+
+  - site_id: nlc_read
+    urls:
+      - "http://read.nlc.cn/allSearch/searchDetail?searchType=1002&showType=1&indexName=data_892&fid=412001000084"
+      - "http://read.nlc.cn/OutOpenBook/OpenObjectBook?aid=403&bid=412001000084"
+
+  - site_id: shidianguji
+    urls:
+      - "https://www.shidianguji.com/book/HY1234"
+      - "https://www.shidianguji.com/zh/book/HY1234"
+
+  - site_id: ctext
+    urls:
+      - "https://ctext.org/analects/xue-er"
+      - "https://ctext.org/analects/xue-er/zh"
+      - "https://ctext.org/text.pl?node=12345"
+      - "https://ctext.org/wiki.pl?if=gb&res=1347940"
+      - "https://ctext.org/wiki.pl?if=gb&chapter=3658735"
+      - "https://ctext.org/library.pl?if=zh&file=147636&page=1"
+
+  # ------------------------------ Taiwan ------------------------------
+  - site_id: ncl_rbook
+    urls:
+      - "https://rbook.ncl.edu.tw/NCLSearch/Search/SearchDetail?item=abc123"
+
+  - site_id: npm_taipei
+    urls:
+      - "https://digitalarchive.npm.gov.tw/Painting/Content?pid=12345"
+      - "https://digitalarchive.npm.gov.tw/Painting/Content?type=1&pid=67890"
+
+  - site_id: tnm
+    urls:
+      - "https://webarchives.tnm.jp/dlib/detail/615"
+
+  - site_id: hanchi
+    urls:
+      - "https://hanchi.ihp.sinica.edu.tw/mqlc/hanjishilu?@1^1440492097^802^^^30211001@@341159809"
+      - "https://hanchi.ihp.sinica.edu.tw/mqlc/hanjishilu?@1^1440492097^802^^^60211001000500050002@@1795010443"
+
+  # ------------------------ General / cross-site ------------------------
+  - site_id: wikisource
+    urls:
+      - "https://zh.wikisource.org/wiki/論語"
+      - "https://zh.wikisource.org/wiki/論語/學而第一"
+      - "https://zh.wikisource.org/zh-hant/論語"
+      - "https://zh.wikisource.org/wiki/%E8%AB%96%E8%AA%9E"
+
+  - site_id: wikimedia_commons
+    urls:
+      - "https://commons.wikimedia.org/wiki/File:Test.djvu"
+      - "https://commons.wikimedia.org/w/index.php?title=File:Test.djvu"
+      - "https://commons.wikimedia.org/wiki/Category:Chinese_classics"
+
+  - site_id: archive_org
+    urls:
+      - "https://archive.org/details/someitem"
+      - "https://archive.org/download/someitem/page1.jpg"
+
+  - site_id: loc
+    urls:
+      - "https://www.loc.gov/item/2006457689/"
+      - "https://www.loc.gov/item/2006457689/?fo=json"
