@@ -7,7 +7,7 @@ import aiohttp
 import asyncio
 from urllib.parse import urlparse, urljoin
 
-from .base import BaseDownloader
+from .base import BaseDownloader, request_url
 from ..models.book import Resource, ResourceType
 from ..config import DownloadConfig
 from ..logger import logger
@@ -105,7 +105,7 @@ class IIIFImageDownloader(BaseDownloader):
             url = resource.url
         
         try:
-            async with session.get(url, headers=request_headers) as response:
+            async with session.get(request_url(url), headers=request_headers) as response:
                 if response.status == 404:
                     raise ResourceNotFoundError(url)
                 
@@ -150,7 +150,7 @@ class IIIFImageDownloader(BaseDownloader):
             url = self.build_image_url(resource.iiif_service_id, size=size)
             
             try:
-                async with session.get(url, headers=request_headers) as response:
+                async with session.get(request_url(url), headers=request_headers) as response:
                     if response.status == 200:
                         output_path.parent.mkdir(parents=True, exist_ok=True)
                         content = await response.read()
@@ -163,7 +163,7 @@ class IIIFImageDownloader(BaseDownloader):
         # Final fallback: use resource.url directly
         if resource.url:
             try:
-                async with session.get(resource.url, headers=request_headers) as response:
+                async with session.get(request_url(resource.url), headers=request_headers) as response:
                     if response.status == 200:
                         output_path.parent.mkdir(parents=True, exist_ok=True)
                         content = await response.read()
@@ -185,7 +185,7 @@ class IIIFImageDownloader(BaseDownloader):
         url = f"{service_id.rstrip('/')}/info.json"
         
         try:
-            async with session.get(url) as response:
+            async with session.get(request_url(url)) as response:
                 if response.status == 200:
                     return await response.json()
         except Exception as e:

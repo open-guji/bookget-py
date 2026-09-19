@@ -56,6 +56,24 @@ class ShidianGujiAdapter(BaseSiteAdapter):
     BASE_URL = "https://www.shidianguji.com"
     _CDN_HOST = "byteimg.com"
 
+    # Match the paragraphs endpoint at ANY version. The site moved v2 → v3 and
+    # the hardcoded "…/paragraphs/v2" match silently stopped firing, so text
+    # downloads collected 0 paragraphs while still reporting success (issue #1).
+    # Staying version-agnostic means the next bump doesn't break us the same way.
+    _PARAGRAPHS_API_RE = re.compile(r"/api/ancientlib/read/book/paragraphs/v\d+")
+
+    # Scroll the tallest scrollable container (the reader pane) down one
+    # screenful. The reader lazy-loads page images as they approach the
+    # viewport, so this is what makes signed CDN URLs appear.
+    _SCROLL_READER_JS = """() => {
+        const els = Array.from(document.querySelectorAll('*'))
+            .filter(e => e.scrollHeight > e.clientHeight + 200 && e.clientHeight > 200);
+        if (!els.length) return false;
+        const e = els.sort((a, b) => b.scrollHeight - a.scrollHeight)[0];
+        e.scrollTop = e.scrollTop + e.clientHeight * 0.85;
+        return true;
+    }"""
+
     _USER_AGENT = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -84,9 +102,11 @@ class ShidianGujiAdapter(BaseSiteAdapter):
     async def _ensure_browser(self):
         """Ensure a persistent browser instance is available (reuse across calls).
 
-        Uses headless=False because 识典古籍's ByteDance SecSDK detects
-        headless browsers, causing unstable API responses.  The window
-        is moved offscreen to stay out of the way.
+        Runs headless. An older comment here claimed headless=False was
+        required because ByteDance SecSDK detects headless browsers, but the
+        code has always passed headless=True and metadata/text/image paths
+        were all verified working headless (2026-09-19). The real cause of
+        "识典失效" was the paragraphs endpoint moving v2 → v3, not headlessness.
         """
         if self._browser and self._browser.is_connected():
             return
@@ -250,7 +270,7 @@ class ShidianGujiAdapter(BaseSiteAdapter):
         Collect signed CDN image URLs for all pages.
 
         Strategy: open book reader in Playwright, intercept byteimg.com requests
-        while navigating through all pages with keyboard (→). Each keypress
+        while scrolling the reader pane to lazy-load every page. Each scroll
         advances the reader; the browser fetches the visible page's image from CDN.
         """
         self._check_playwright()
@@ -311,23 +331,28 @@ class ShidianGujiAdapter(BaseSiteAdapter):
             # Give the first page time to load its image
             await asyncio.sleep(3)
 
-            # Navigate through all pages: press → repeatedly until we have all images
-            # The reader preloads 2-3 pages ahead, so we may get several per keypress
+            # Scroll the reader pane to force lazy-loading of page images.
+            #
+            # This used to press ArrowRight, but in the current reader that
+            # pages the TEXT column and never makes the image pane load more,
+            # so only the 2 initially-visible images were ever signed (34/36
+            # pages came back "No signed URL found"). Scrolling the tallest
+            # scrollable container is what actually advances the images.
             stall_count = 0
             prev_len = len(image_map)
-            max_stall = 15      # stop if 15 consecutive keypresses yield no new images
+            max_stall = 25      # stop after this many scrolls yield no new images
 
-            for nav in range(total_pages + 20):
+            for nav in range(total_pages * 4 + 40):
                 if len(image_map) >= total_pages:
                     break
-                await page.keyboard.press("ArrowRight")
-                await asyncio.sleep(1.0)
+                await page.evaluate(self._SCROLL_READER_JS)
+                await asyncio.sleep(0.8)
 
                 if len(image_map) == prev_len:
                     stall_count += 1
                     if stall_count >= max_stall:
                         logger.warning(
-                            f"[识典古籍] No new images after {max_stall} keypresses; stopping early "
+                            f"[识典古籍] No new images after {max_stall} scrolls; stopping early "
                             f"({len(image_map)}/{total_pages} captured)"
                         )
                         break
@@ -337,7 +362,7 @@ class ShidianGujiAdapter(BaseSiteAdapter):
 
                 if (nav + 1) % 20 == 0:
                     logger.info(
-                        f"[识典古籍] Nav {nav+1}: {len(image_map)}/{total_pages} image URLs captured"
+                        f"[识典古籍] Scroll {nav+1}: {len(image_map)}/{total_pages} image URLs captured"
                     )
 
             logger.info(f"[识典古籍] Captured {len(image_map)}/{total_pages} signed image URLs")
@@ -386,7 +411,8 @@ class ShidianGujiAdapter(BaseSiteAdapter):
         """
         Collect paragraph text for all chapters.
 
-        Navigates through the reader to trigger paragraphs/v2 API calls.
+        Navigates through the reader to trigger the paragraphs API calls
+        (v3 at time of writing; matched version-agnostically).
         Text content is unencrypted (contentEncryptType: 0).
         """
         self._check_playwright()
@@ -395,6 +421,7 @@ class ShidianGujiAdapter(BaseSiteAdapter):
         paragraphs_seen: set[str] = set()
         chapters_seen: set[str] = set()
         book_info: dict = {}
+        total_from_api: dict = {}
 
         pw, browser, context = await self._launch_browser()
         try:
@@ -409,11 +436,20 @@ class ShidianGujiAdapter(BaseSiteAdapter):
                             book_info.update(data["data"].get("bookInfo", {}))
                     except Exception:
                         pass
-                elif "/api/ancientlib/read/book/paragraphs/v2" in url:
+                elif self._PARAGRAPHS_API_RE.search(url):
                     try:
                         data = await response.json()
                         if data.get("errorCode") == 0:
-                            paras = data["data"].get("paragraphs", [])
+                            payload = data["data"]
+                            # v3 reports the real total here; prefer it over the
+                            # paragraphCount in bookInfo, which counts differently.
+                            total = payload.get("totalParaNum")
+                            if total:
+                                try:
+                                    total_from_api["n"] = int(total)
+                                except (TypeError, ValueError):
+                                    pass
+                            paras = payload.get("paragraphs", [])
                             for p in paras:
                                 pid = str(p.get("paragraphId", ""))
                                 if pid and pid not in paragraphs_seen:
@@ -443,7 +479,14 @@ class ShidianGujiAdapter(BaseSiteAdapter):
             except Exception:
                 catalog = []
             total_chapters = len(catalog) or 99
-            total_paragraphs = int(book_info.get("paragraphCount", 0)) or 999
+            # Prefer totalParaNum from the paragraphs API (authoritative) over
+            # bookInfo.paragraphCount, falling back to a guess only if neither
+            # is present.
+            total_paragraphs = (
+                total_from_api.get("n")
+                or int(book_info.get("paragraphCount", 0))
+                or 999
+            )
 
             logger.info(
                 f"[识典古籍] Book has {total_chapters} chapters, "
@@ -483,6 +526,18 @@ class ShidianGujiAdapter(BaseSiteAdapter):
                 f"[识典古籍] Collected {len(all_paragraphs)} paragraphs "
                 f"from {len(chapters_seen)} chapters"
             )
+
+            # Collecting nothing means the interception never fired (e.g. the
+            # site moved the paragraphs endpoint again). Previously this path
+            # returned an empty result that the caller reported as a successful
+            # download of 0 files — the user-visible shape of issue #1. Fail
+            # loudly instead of pretending it worked.
+            if not all_paragraphs:
+                raise DownloadError(
+                    "[识典古籍] 未能抓取到任何段落。可能是站点接口又变了"
+                    f"（当前匹配 {self._PARAGRAPHS_API_RE.pattern}），"
+                    "或该书需要登录。请提 issue 附上书籍 URL。"
+                )
 
         finally:
             await browser.close()

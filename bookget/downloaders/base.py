@@ -12,6 +12,25 @@ from ..logger import logger
 from ..exceptions import DownloadError, ResourceNotFoundError, RateLimitError
 
 
+def request_url(url: str):
+    """Wrap a URL so aiohttp sends its query string byte-for-byte.
+
+    aiohttp normalizes URL strings, which decodes ``%2F`` in a query value
+    into a literal ``/``. For pre-signed CDN links (识典古籍's byteimg
+    ``x-signature``, and S3-style signatures generally) that rewrites the
+    signature and the server answers 403. ``yarl.URL(..., encoded=True)``
+    tells aiohttp the URL is already encoded and must be left alone.
+
+    Falls back to the plain string if yarl is somehow unavailable, so a
+    missing optional import degrades to today's behavior rather than raising.
+    """
+    try:
+        from yarl import URL
+        return URL(url, encoded=True)
+    except Exception:  # pragma: no cover - yarl ships with aiohttp
+        return url
+
+
 class BaseDownloader(ABC):
     """
     Abstract base class for resource downloaders.
@@ -123,7 +142,7 @@ class ImageDownloader(BaseDownloader):
         request_headers = headers or {}
         
         try:
-            async with session.get(resource.url, headers=request_headers) as response:
+            async with session.get(request_url(resource.url), headers=request_headers) as response:
                 if response.status == 404:
                     raise ResourceNotFoundError(resource.url)
                 if response.status == 429:
@@ -198,7 +217,7 @@ class TextDownloader(BaseDownloader):
         request_headers = headers or {}
         
         try:
-            async with session.get(resource.url, headers=request_headers) as response:
+            async with session.get(request_url(resource.url), headers=request_headers) as response:
                 if response.status == 404:
                     raise ResourceNotFoundError(resource.url)
                 if response.status == 429:
