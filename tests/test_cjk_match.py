@@ -4,6 +4,8 @@
 # it now lives in bookget.shared.cjk_match. These tests lock the behavior both
 # adapters depend on for search/match_book.
 
+import pytest
+
 from bookget.shared import cjk_match as m
 
 
@@ -89,3 +91,33 @@ class TestParseAuthorDynasty:
 
     def test_empty(self):
         assert m.parse_author_dynasty("") == ("", "")
+
+
+class TestOpenCCIsAvailable:
+    """OpenCC is a declared dependency, not an optional nicety.
+
+    It used to be used by this module but declared nowhere in pyproject, so
+    pip-installed users silently lost 繁简 matching (论语 stopped matching
+    論語) with no error at all. These tests fail loudly if that regresses.
+    """
+
+    def test_opencc_importable(self):
+        import opencc  # noqa: F401
+
+    def test_s2t_converter_usable(self):
+        assert m._get_s2t() is not None
+        assert m._convert_s2t("论语") == "論語"
+
+    def test_variant_map_is_not_empty(self):
+        # Modern OpenCC wheels ship only binary .ocd2 dicts, so the original
+        # `dictionary/*.txt` parsing silently produced an EMPTY map even when
+        # OpenCC was installed — making 异体字 normalization a no-op.
+        assert len(m._get_variant_map()) > 0
+
+    @pytest.mark.parametrize("variant,standard", [
+        ("史徴", "史徵"),   # JP variant (jp2t)
+        ("竜", "龍"),
+        ("沢", "澤"),
+    ])
+    def test_jp_variants_normalize(self, variant, standard):
+        assert m.normalize_variants(variant) == m.normalize_variants(standard)

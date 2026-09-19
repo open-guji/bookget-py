@@ -23,11 +23,17 @@ classifiers = [
 dependencies = [
     "aiohttp>=3.8",
     "requests>=2.28",
+    # Required by bookget/shared/cjk_match.py for 繁简/异体字 normalization,
+    # which search / match / metadata matching all rely on. NOT optional: the
+    # module degrades silently without it (论语 stops matching 論語), so a
+    # missing OpenCC costs results with no error. See DEVELOPER.md.
+    "opencc>=1.1",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
+    "pytest-asyncio>=0.21",  # asyncio_mode=strict below needs it to collect async tests
     "build>=1.0",
     "ruff>=0.4",
     "pyyaml>=6.0",

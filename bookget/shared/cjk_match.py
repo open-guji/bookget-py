@@ -8,7 +8,11 @@ Used by site adapters (CText, Shidianguji, …) for ``search`` / ``match_book``:
 行为——CText 原本更完整（单字异体替换、strict 前缀匹配），识典缺这些，
 统一后两边都获得完整能力。
 
-OpenCC 缺失时全部函数优雅降级（仅做内置异体表替换），不抛异常。
+OpenCC 是**正式依赖**（见 pyproject `dependencies`），不是可选项：缺了它
+繁简匹配会大幅退化（论语 配不上 論語），而调用方拿到的只是「少了一半结果」，
+不会看到任何报错。历史上它一直没被声明，导致 pip 安装的用户长期静默受损。
+因此这里保留可运行的降级路径（仅做内置异体表替换）**但会打一条 WARNING**，
+让问题可见而不是悄无声息。
 """
 
 from __future__ import annotations
@@ -163,13 +167,34 @@ _t2s = None
 _variant_map: Optional[dict[str, str]] = None
 
 
+_warned_missing = False
+
+
+def _warn_missing_opencc(exc: Exception) -> None:
+    """Warn once that OpenCC is unusable, instead of degrading in silence."""
+    global _warned_missing
+    if _warned_missing:
+        return
+    _warned_missing = True
+    try:
+        from ..logger import logger
+        logger.warning(
+            "OpenCC 不可用（%s）——繁简/异体字匹配已退化，搜索与匹配会漏掉结果"
+            "（例如 论语 匹配不上 論語）。请安装：pip install opencc",
+            exc,
+        )
+    except Exception:
+        pass
+
+
 def _get_s2t():
     global _s2t
     if _s2t is None:
         try:
             from opencc import OpenCC
             _s2t = OpenCC('s2t')
-        except Exception:
+        except Exception as e:
+            _warn_missing_opencc(e)
             return None
     return _s2t
 
@@ -180,7 +205,8 @@ def _get_t2s():
         try:
             from opencc import OpenCC
             _t2s = OpenCC('t2s')
-        except Exception:
+        except Exception as e:
+            _warn_missing_opencc(e)
             return None
     return _t2s
 
@@ -205,6 +231,59 @@ def _convert_t2s(text: str) -> str:
     return text
 
 
+def _find_opencc_dict_dir(opencc_mod) -> Optional[str]:
+    """Locate a directory holding OpenCC's plain-text ``*Variants*.txt`` dicts.
+
+    Older OpenCC packages shipped them under ``<pkg>/dictionary``. Newer wheels
+    moved data to ``<pkg>/clib/share/opencc`` and ship only binary ``.ocd2``
+    files there, in which case there is no usable text dir and we return None.
+    """
+    base = os.path.dirname(opencc_mod.__file__)
+    for rel in ('dictionary', os.path.join('clib', 'share', 'opencc'), 'share/opencc'):
+        d = os.path.join(base, rel)
+        if os.path.isdir(d) and any(
+            f.endswith('Variants.txt') or f.endswith('VariantsRev.txt')
+            for f in os.listdir(d)
+        ):
+            return d
+    return None
+
+
+def _build_variant_map_via_converters() -> dict[str, str]:
+    """Derive a single-char variant→standard map using OpenCC converters.
+
+    ``jp2t`` / ``tw2t`` / ``hk2t`` map regional variant forms back to standard
+    traditional — the same JP/TW/HK coverage the old ``JPVariants.txt`` /
+    ``*VariantsRev.txt`` parsing aimed for (``jp2t`` is what turns 徴 into 徵).
+    We probe the CJK Unified Ideographs block once and keep only the chars that
+    actually change, without depending on text dictionaries being shipped.
+    """
+    vmap: dict[str, str] = {}
+    try:
+        from opencc import OpenCC
+        convs = []
+        for name in ('jp2t', 'tw2t', 'hk2t'):
+            try:
+                convs.append(OpenCC(name))
+            except Exception:
+                continue
+        if not convs:
+            return vmap
+        for cp in range(0x4E00, 0xA000):
+            ch = chr(cp)
+            for c in convs:
+                try:
+                    std = c.convert(ch)
+                except Exception:
+                    continue
+                if len(std) == 1 and std != ch:
+                    vmap[ch] = std
+                    break
+    except Exception:
+        pass
+    return vmap
+
+
 def _get_variant_map() -> dict[str, str]:
     """Load CJK variant→standard mapping from OpenCC dictionary files.
 
@@ -219,7 +298,14 @@ def _get_variant_map() -> dict[str, str]:
     vmap: dict[str, str] = {}
     try:
         import opencc
-        dict_dir = os.path.join(os.path.dirname(opencc.__file__), 'dictionary')
+        dict_dir = _find_opencc_dict_dir(opencc)
+        if not dict_dir:
+            # Modern wheels (OpenCC >= ~1.1) ship only binary .ocd2 dictionaries
+            # and no plain-text ones, so the parsing below finds nothing. Fall
+            # back to OpenCC's own tw2t/hk2t converters, which cover the same
+            # TW/HK variant→standard direction (e.g. 徴→徵) char by char.
+            _variant_map = _build_variant_map_via_converters()
+            return _variant_map
 
         # JPVariants: standard\tvariant  →  variant→standard
         jp_path = os.path.join(dict_dir, 'JPVariants.txt')
