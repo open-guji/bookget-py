@@ -5,6 +5,9 @@ Bookget CLI - Download ancient Chinese book resources
 
 Usage:
     python -m bookget download "URL" [options]
+    python -m bookget download "URL1" "URL2" ... [options]      # batch
+    python -m bookget download --url-file urls.txt [options]    # batch from file
+    python -m bookget download --retry-failed failed_urls.txt   # retry a batch
     python -m bookget metadata "URL" [--format json]
     python -m bookget sites --list
     python -m bookget sites --check "URL"
@@ -17,6 +20,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -29,7 +33,7 @@ if sys.stderr and sys.stderr.encoding != 'utf-8':
 
 from bookget.config import Config
 from bookget.core.resource_manager import ResourceManager
-from bookget.adapters.registry import AdapterRegistry
+from bookget.adapters.registry import AdapterRegistry, get_adapter
 from bookget.logger import setup_logger, logger
 from bookget.exceptions import GujiResourceError, AdapterNotFoundError
 
@@ -54,15 +58,156 @@ def json_progress_callback(downloaded: int, total: int):
     print(json.dumps(event, ensure_ascii=False), flush=True)
 
 
+FAILED_URLS_FILENAME = "failed_urls.txt"
+
+
+def _safe_dirname(name: str) -> str:
+    """Make a filesystem-safe folder name from a book id or URL.
+
+    Book ids are not guaranteed to be path-safe — CText's look like
+    ``path:analects``, and ``:`` is illegal in Windows paths (WinError 267),
+    which would fail the whole download. Strip the scheme if we were handed a
+    URL, then reduce anything outside [A-Za-z0-9._-] to underscores.
+    """
+    name = re.sub(r"^https?://", "", name)
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_")
+    return name[:80] or "book"
+
+
+def read_url_file(path: str) -> list:
+    """Read URLs from a text file, one per line.
+
+    Blank lines and ``#`` comments are ignored so a list can be annotated.
+    """
+    urls = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                urls.append(line)
+    return urls
+
+
+def collect_download_urls(args) -> list:
+    """Build the URL list for `download` from positional args / --url-file.
+
+    De-duplicates while preserving order, so a URL repeated between the
+    command line and a list file is only fetched once.
+    """
+    urls = list(getattr(args, "url", None) or [])
+
+    if getattr(args, "url_file", None):
+        urls.extend(read_url_file(args.url_file))
+
+    if getattr(args, "retry_failed", None):
+        urls.extend(read_url_file(args.retry_failed))
+
+    seen = set()
+    deduped = []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            deduped.append(u)
+    return deduped
+
+
 async def cmd_download(args, config: Config):
-    """Handle download command."""
+    """Handle download command (one or many URLs)."""
+    urls = collect_download_urls(args)
+    if not urls:
+        logger.error("No URLs given. Pass URLs directly, or use --url-file / --retry-failed.")
+        raise SystemExit(2)
+
+    if len(urls) == 1:
+        await _download_one(args, config, urls[0])
+        return
+
+    await _download_many(args, config, urls)
+
+
+async def _download_many(args, config: Config, urls: list):
+    """Download several books in sequence, isolating per-book failures.
+
+    One bad URL must not abort the rest of the batch: each is tried, the
+    outcome recorded, and a summary printed at the end. Failed URLs are
+    written to `failed_urls.txt` so the batch can be resumed with
+    `--retry-failed`.
+    """
+    base_output = Path(args.output) if args.output else Path.cwd()
+    total = len(urls)
+    succeeded, failed = [], []
+
+    logger.info(f"Batch download: {total} URLs")
+
+    for i, url in enumerate(urls, 1):
+        logger.info(f"[{i}/{total}] {url}")
+        try:
+            # Each book gets its own subdirectory, named after the adapter's
+            # book id, so a batch doesn't collapse into one mixed folder.
+            await _download_one(args, config, url, output_override=base_output,
+                                per_book_subdir=True)
+            succeeded.append(url)
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            logger.error(f"[{i}/{total}] failed: {e}")
+            failed.append((url, str(e)))
+
+    print()
+    logger.info(f"Batch complete: {len(succeeded)} succeeded, {len(failed)} failed, {total} total")
+
+    if failed:
+        failed_path = base_output / FAILED_URLS_FILENAME
+        try:
+            base_output.mkdir(parents=True, exist_ok=True)
+            with open(failed_path, "w", encoding="utf-8") as f:
+                f.write("# URLs that failed in the last batch.\n")
+                f.write(f"# Retry with: bookget download --retry-failed {failed_path}\n")
+                for url, err in failed:
+                    f.write(f"# {err}\n{url}\n")
+            logger.info(f"Failed URLs written to: {failed_path}")
+            logger.info(f"Retry them with: bookget download --retry-failed {failed_path}")
+        except OSError as e:
+            logger.warning(f"Could not write {failed_path}: {e}")
+        for url, err in failed:
+            logger.error(f"  FAILED {url}: {err}")
+
+    if args.json:
+        print(json.dumps({
+            "total": total,
+            "succeeded": len(succeeded),
+            "failed": len(failed),
+            "failed_urls": [u for u, _ in failed],
+        }, ensure_ascii=False, indent=2))
+
+    if failed:
+        raise SystemExit(1)
+
+
+async def _download_one(args, config: Config, url: str,
+                        output_override: Path = None,
+                        per_book_subdir: bool = False):
+    """Download a single book."""
     manager = ResourceManager(config)
-    
+
     try:
-        logger.info(f"Starting download: {args.url}")
-        
-        output = Path(args.output) if args.output else None
-        
+        logger.info(f"Starting download: {url}")
+
+        if output_override is not None:
+            output = output_override
+            if per_book_subdir:
+                # Keep each book in its own folder inside the batch dir,
+                # otherwise every book's images/ and metadata.json overwrite
+                # each other.
+                try:
+                    adapter = get_adapter(url, config.download)
+                    book_id = adapter.extract_book_id(url) if adapter else ""
+                except Exception:
+                    book_id = ""
+                output = output / _safe_dirname(book_id or url)
+        else:
+            output = Path(args.output) if args.output else None
+
         if args.json_progress:
             callback = json_progress_callback
         elif not args.quiet:
@@ -71,7 +216,7 @@ async def cmd_download(args, config: Config):
             callback = None
 
         task = await manager.download(
-            url=args.url,
+            url=url,
             output_dir=output,
             include_images=not args.no_images,
             include_text=not args.no_text,
@@ -195,7 +340,23 @@ async def cmd_expand(args, config: Config):
 
 
 async def cmd_download_incremental(args, config: Config):
-    """Handle incremental download command."""
+    """Handle incremental download command.
+
+    Shares the `download` parser, whose `url` is now a list, so resolve it to
+    a single URL here. Incremental download is manifest-based and inherently
+    per-book, so batching isn't supported for it.
+    """
+    urls = collect_download_urls(args)
+    if not urls:
+        logger.error("No URL given.")
+        raise SystemExit(2)
+    if len(urls) > 1:
+        logger.error(
+            "--incremental / --section take a single URL "
+            f"(got {len(urls)}). Run them one book at a time."
+        )
+        raise SystemExit(2)
+    single_url = urls[0]
     manager = ResourceManager(config)
 
     try:
@@ -214,7 +375,7 @@ async def cmd_download_incremental(args, config: Config):
             status_cb = None
 
         manifest = await manager.download_incremental(
-            url=args.url,
+            url=single_url,
             output_dir=output,
             node_ids=args.section if hasattr(args, 'section') and args.section else None,
             include_images=not args.no_images,
@@ -550,8 +711,21 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Commands")
     
     # download command
-    p_download = subparsers.add_parser("download", help="Download resources from URL")
-    p_download.add_argument("url", help="Book URL to download")
+    p_download = subparsers.add_parser(
+        "download",
+        help="Download resources from one or more URLs",
+        description="Download one book, or many at once. With several URLs "
+                    "each book is saved into its own subdirectory of --output, "
+                    "a failing URL doesn't stop the rest, and the ones that "
+                    "failed are written to failed_urls.txt for --retry-failed.",
+    )
+    p_download.add_argument("url", nargs="*",
+                            help="Book URL(s) to download; repeat for batch download")
+    p_download.add_argument("--url-file", type=str,
+                            help="Read URLs from a file, one per line ('#' starts a comment)")
+    p_download.add_argument("--retry-failed", type=str, metavar="FILE",
+                            help="Retry the URLs in FILE (e.g. the failed_urls.txt "
+                                 "from a previous batch)")
     p_download.add_argument("-o", "--output", help="Output directory")
     p_download.add_argument("--no-images", action="store_true", help="Skip images")
     p_download.add_argument("--no-text", action="store_true", help="Skip text")

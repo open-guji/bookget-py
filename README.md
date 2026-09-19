@@ -127,6 +127,32 @@ bookget download "URL" -o ./output --no-text
 bookget download "URL" -o ./output --no-images
 ```
 
+#### 批量下载
+
+一次下载多本。每本各自存进 `-o` 目录下以书籍 ID 命名的子目录；
+其中一本失败不会中断整批，末尾打印汇总。
+
+```bash
+# 直接给多个 URL
+bookget download "URL1" "URL2" "URL3" -o ./output
+
+# 从文件读取，每行一个 URL（# 开头为注释）
+bookget download --url-file urls.txt -o ./output
+
+# 失败的 URL 会写进 <输出目录>/failed_urls.txt，可直接重跑
+bookget download --retry-failed ./output/failed_urls.txt -o ./output
+```
+
+`urls.txt` 形如：
+
+```text
+# 论语
+https://ctext.org/analects
+https://www.shidianguji.com/zh/book/SBCK001
+```
+
+整批有失败时进程退出码为 `1`，方便脚本判断。
+
 #### 结构发现与分步下载
 
 ```bash
