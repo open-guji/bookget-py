@@ -7,7 +7,11 @@ name = "bookget"
 version = "0.3.4"
 description = "Download and parse ancient Chinese book resources from digital libraries"
 readme = "README.md"
-license = { file = "LICENSE" }
+authors = [
+    { name = "开源古籍 (open-guji)" },
+]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 keywords = ["ancient-books", "digital-library", "downloader", "classical-chinese"]
 classifiers = [

@@ -272,4 +272,4 @@ python packaging/build.py ui    # 只构建 bookget-ui（会自动构建前端�
 
 ## 许可证
 
-MIT
+[Apache License 2.0](LICENSE)
