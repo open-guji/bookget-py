@@ -5,6 +5,7 @@
 # SecSDK generates device fingerprints (verifyFp / a_bogus) required for all API calls.
 
 import re
+import sys
 import asyncio
 import json
 import urllib.parse
@@ -87,9 +88,24 @@ class ShidianGujiAdapter(BaseSiteAdapter):
 
     def _check_playwright(self):
         if not HAS_PLAYWRIGHT:
+            # The packaged .exe deliberately ships without Playwright/Chromium
+            # (too large), so exe users land here. Say so in Chinese and point
+            # at the fix rather than dumping an English ImportError.
+            frozen = getattr(sys, "frozen", False)
+            if frozen:
+                raise DownloadError(
+                    "识典古籍需要浏览器内核，而打包版 exe 未内置 Playwright/Chromium"
+                    "（体积原因）。\n"
+                    "请改用 pip 安装后再下载识典古籍：\n"
+                    '  pip install "bookget[browser]"\n'
+                    "  playwright install chromium\n"
+                    "其余站点不受影响，exe 可正常使用。"
+                )
             raise DownloadError(
-                "playwright is required for 识典古籍. "
-                "Install with: pip install playwright && playwright install chromium"
+                "识典古籍需要 Playwright 浏览器自动化（绕过字节跳动 SecSDK 反爬）。\n"
+                "请执行：\n"
+                '  pip install "bookget[browser]"\n'
+                "  playwright install chromium"
             )
 
     def extract_book_id(self, url: str) -> str:
