@@ -1,3 +1,143 @@
+# 下发任务（2026-09-19，来源：overview 盘点实测）
+
+> 2026-09-19 实测结论：本项目**代码走在前面、交付落在后面**。
+> master 注册 37 个适配器，但最新 release v0.3.4（2026-04-27）只有 19 个。
+> 用户拿到的是**四个多月前的版本**，近半年的工作没有任何用户能用到。
+> 两个 open issue 都源于此。下一步以「把已有成果交付出去」为主线，而非继续加站点。
+
+## 实测到的事实（与上次盘点不同之处）
+
+| 项 | 实测值 | 说明 |
+|---|---|---|
+| master 适配器数 | **37** | `AdapterRegistry.list_adapters()` 运行期实测 |
+| v0.3.4 适配器数 | **19** | v0.3.4 worktree 同法实测 → **18 个未交付** |
+| 未发布提交 | 3 个（含「20+ 适配器」大提交） | `git log v0.3.4..master` |
+| 离线测试 | **489 passed / 3 failed** | 非旧档所记「全绿」 |
+| 未提交工作 | IA 上传三件套（270 行新文件 + 6 文件改动） | 只在本地工作区，**未 commit 未推送** |
+| 当前分支 | `master`（非 main） | 与其他仓不一致 |
+
+---
+
+## 2026-09-19 本轮已办（实测结论，替代上方部分推断）
+
+> 上方「实测到的事实」里对 issue #1 的猜测（headless 矛盾）**是错的**，
+> 已按实测订正，保留原文以便对照推断与真相的差距。
+
+- **issue #1 真正的病因不是 headless**，而是站点把段落接口 v2 升到 **v3**，
+  适配器硬匹配 "paragraphs/v2" 导致拦截不再触发：日志「999 paragraphs」
+  却「Collected 0」，最后还报成功。headless=True 实测三条路径全部正常。
+  顺带修掉另两个真缺陷：
+  - 图片翻页用 ArrowRight（翻的是文字栏，图片不加载）→ 改滚动阅读器容器，
+    签名 URL 2/36 → **35**
+  - 签名 CDN 链接 403：aiohttp 把 x-signature 里的 %2F 规范化成 `/`
+    → 改 yarl.URL(encoded=True)，**35/35 零失败**
+- **OpenCC 未声明依赖**确认为 3 个失败测试的根因；另发现 `_get_variant_map`
+  读 `<pkg>/dictionary/*.txt`，而新版 wheel 只发二进制 .ocd2，
+  **即使装了 OpenCC 异体表也恒为空**（徴 归一不到 徵）→ 改用
+  jp2t/tw2t/hk2t 构建，异体表 0 → **406 条**
+- **另外发现并修复**（不在原计划内）：
+  - 仓库根本没有 LICENSE 文件，pyproject 指向不存在的文件，构建告警、
+    PyPI 包不含许可证、GitHub 认不出。已补 **Apache-2.0**（与
+    book-index-manager 一致），并改用 PEP 639 写法
+  - `dev` extra 缺 pytest-asyncio，全新 `pip install -e ".[dev]"`
+    连测试都收集不起来
+  - CText 书籍 ID 形如 `path:analects`，`:` 在 Windows 非法 →
+    批量下载落盘前统一过 `_safe_dirname()`
+  - `bookget/__init__.py` 的 `__version__` 停在 0.1.0，与 pyproject 脱节
+- 离线套件 **489 passed / 3 failed → 511 passed / 0 failed**
+
+### 尚未做（交给下一轮）
+- **推送 + 打 tag v0.4.0**：本轮所有提交仍在本地 master，未 push
+- `master` → `main` 改名（P2）
+- nlc_read 未声明 supports_* 标志（README 已手工标注，代码待修）
+- ruff 14 处既有告警（`__all__` 未排序等，非本轮引入）
+
+---
+
+## P0 — 止血：把已完成的东西交出去
+
+### [x] 0.1 先落盘未提交的 IA 上传功能（done 2026-09-19，commit f484e5f）
+`bookget/ia_upload.py`、`bookget/ia_metadata.py` 两个新文件**从未 commit**，
+外加 main.py / cli.spec / ui.spec / pyproject / CLAUDE.md / DEVELOPER.md 六处改动挂在工作区。
+这是**丢失风险最高的一项**——一次误 clean/stash 就没了。
+- 先 `pytest` 确认不破坏现有套件，再单独 commit 推上去
+- 注意 `[ia]` extra 已加进 pyproject，属同一批改动，一起提交
+
+### [x] 0.2 修 cjk_match 的 3 个失败（done 2026-09-19，commit 102ca69）
+```
+FAILED test_simplified_matches_traditional   论语 ↔ 論語 不匹配
+FAILED test_traditional_matches_simplified
+FAILED test_simplified_traditional（作者）
+```
+**根因：`bookget/shared/cjk_match.py` 依赖 OpenCC，但 `pyproject.toml` 里
+dependencies 和所有 extra 都没声明它。** 代码写了「OpenCC 缺失时优雅降级」，
+于是 pip 装的用户繁简匹配**静默失效、不报错**——search/match 少一半结果而无人知道。
+- 把 `opencc` 加进正式 `dependencies`（这是核心能力，不该是可选）
+- 或明确降级为 extra，但需在 search/match 路径给出显式 WARNING，不能静默
+- 修完三个测试应转绿；**不要改测试去迁就代码**
+
+### [~] 0.3 发 v0.4.0，把 18 个适配器交付给用户（版本已 bump，**待推送打 tag**）
+这是对两个 issue 最直接的回应。
+- 确认 release.yml 仍可跑（近期无 run 记录，需 workflow_dispatch 验证一次）
+- README 站点表需从 19 站更新到 37 站
+- 发版后在 issue #1 / #2 下回复，告知新版本
+
+---
+
+## P1 — 回应 issue
+
+### [x] 1.1 issue #1「识典古籍下载失效」（done 2026-09-19，commit 9acaaa3）
+实测：站点活着（book 页 200），但 `/api/ancientlib/read/reader-book/get/{id}`
+裸请求返回 `{"errorCode":40001}`——鉴权仍在，Playwright 路线**仍然必要**
+（SSR `_ROUTER_DATA` 只有壳、无正文，没有免浏览器捷径）。
+
+**已定位一处强嫌疑 bug：代码与自身注释矛盾。**
+`shidianguji.py:87-88` 注释写：
+> Uses headless=False because 识典古籍's ByteDance SecSDK detects
+> headless browsers, causing unstable API responses.
+
+但第 96 行和第 133 行实际都是 `headless=True`。对照 `ncl_rbook.py:338` 用的是
+`headless=False`。该矛盾自 v0.2.0 即存在（`git log -L` 确认），属长期潜伏 bug，
+与「时好时坏/突然失效」的症状吻合。
+- 先装 playwright 复现（本机当前**未装**，无法直接验证，这是必须先做的一步）
+- 按注释改回 `headless=False`（窗口移出屏外），或改为可配置并默认 false
+- 另需排查：exe 用户根本没有 playwright——`cli.spec`/`ui.spec` 里
+  **没有任何 playwright/chromium 打包痕迹**，下载 exe 的用户用识典必然失败。
+  至少要在 exe 里给出清晰的中文提示而非堆栈
+- 修完回复 issue #1
+
+### [x] 1.2 issue #2「支持批量下载吗」（done 2026-09-19，commit 34b2b95）
+实测：`download` 子命令只接受**单个 url**（`p_download.add_argument("url")`），
+确无批量能力。已在 issue 下回复「暂时更新较少、欢迎共建」，但功能本身值得做，
+且成本不高（基础设施齐全：已有 `--concurrency`、`--incremental`、
+`.download_state.json` 断点续传）。
+建议最小实现：
+- `download` 支持多个 url 位置参数，及 `--url-file <f>`（每行一个 URL，`#` 注释）
+- 复用现有并发与续传；单条失败不中断整批，末尾打印汇总（成功/失败/跳过）
+- 失败清单落盘，支持 `--retry-failed` 重跑
+- 加离线测试；完成后回复 issue #2
+
+---
+
+## P2 — 卫生与一致性
+
+- [ ] 分支名 `master` → `main`，与 kaiyuanguji-web / book-index 等仓拉齐
+- [ ] 本档旧记录里多处「离线 XXX passed 全绿」已不准（实测 3 failed），
+      修完 0.2 后统一订正，勿再直接引用旧数字
+- [ ] `[browser]` / `[tiles]` / `[ia]` 三个 extra 的缺失依赖，在运行期都走「静默降级」
+      路线。应统一为：缺依赖时给**明确中文提示**，而不是悄悄少功能（同 0.2 的教训）
+
+---
+
+## 暂缓（理由）
+
+**继续加新站点适配器暂缓。** 站点覆盖已 37 个、抓取能力不是瓶颈；
+而已做好的 18 个站点用户根本拿不到。先把交付链路打通（P0），
+再谈广度。旧档 Phase 3 尾部的待办站点（宫内厅/东大东文研/国立公文书馆/
+奎章阁/俄国 RSL/IDP、早稻田 grind、广州大典登录态）原样保留在下方，
+不删除，待 P0/P1 清完再评估。
+
+---
 # 下发任务（2026-09-08，来源：overview `项目进展/资源下载/todo.md` P1）
 
 > 2026-09-08 按：盘点时误以为本档为空，实测本档内容完整（下方原有大量记录）。

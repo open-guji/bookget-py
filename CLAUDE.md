@@ -25,7 +25,7 @@ bookget/
 │   └── resource_manager.py  # 核心协调器，串联适配器→下载器→存储
 ├── models/
 │   └── book.py              # 数据模型 (BookMetadata, Resource, DownloadTask)
-├── adapters/                # 网站适配器 (15 个已实现)
+├── adapters/                # 网站适配器 (37 个已注册，registry 自动发现)
 │   ├── base.py              # BaseSiteAdapter 抽象基类
 │   ├── registry.py          # 适配器自动发现与注册
 │   ├── iiif/                # IIIF 站点: Harvard, NDL, Princeton, Stanford, Berkeley
@@ -49,10 +49,24 @@ bookget/
 
 ## 实现状态
 - 核心基础设施: 完成
-- 14 个网站适配器: 完成
-- 文字资源支持: 部分实现
+- 37 个网站适配器: 完成（以 `AdapterRegistry.list_adapters()` 为准，勿手数文件）
+- 文字资源支持: 部分实现（ctext / 识典 / 维基文库 / 漢籍）
 - IA 上传 (`upload`/`ia-patch`/`ia-check`): 完成，`internetarchive` 为可选依赖 (`pip install bookget[ia]`)
+- 批量下载 (`download` 多 URL / `--url-file` / `--retry-failed`): 完成
 - 预处理管道 / 50+ 站点扩展: 计划中
+
+## 易踩的坑
+- **可选依赖不要静默降级**：OpenCC 曾被 cjk_match 依赖却没写进 pyproject，
+  pip 用户繁简匹配长期静默失效（论语 配不上 論語）而毫无报错。缺依赖要么
+  声明为正式依赖，要么明确告警，不能悄悄少功能。
+- **站点接口版本号会变**：识典的 paragraphs 接口从 v2 升到 v3，硬匹配 "v2"
+  的拦截再也不触发，结果「抓到 0 段」却还报下载成功。拦截 URL 用版本无关
+  正则，且抓不到东西时要抛错而不是返回空。
+- **签名 URL 不能让 aiohttp 规范化**：x-signature 里的 %2F 会被解成 /，
+  签名失效返回 403。统一走 `downloaders.base.request_url()`
+  （yarl.URL(..., encoded=True)）。
+- **书籍 ID 不保证是合法路径名**：CText 的形如 `path:analects`，
+  `:` 在 Windows 上非法。落盘前过 `_safe_dirname()`。
 
 ## 开发约定
 - 测试: `pytest tests/`

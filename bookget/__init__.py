@@ -3,5 +3,6 @@
 from .config import Config
 from .exceptions import GujiResourceError
 
-__version__ = "0.1.0"
+# Keep in sync with [project] version in pyproject.toml.
+__version__ = "0.4.0"
 __all__ = ["Config", "GujiResourceError"]
