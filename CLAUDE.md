@@ -4,7 +4,8 @@
 - 始终使用中文进行交流和输出
 
 ## 用途
-Bookget 是一个古籍数字资源下载与管理工具，支持从 50+ 个数字图书馆网站下载古籍的图片和文字资源。全异步架构，插件式适配器设计。
+Bookget 是一个古籍数字资源下载与管理工具，支持从 50+ 个数字图书馆网站下载古籍的图片和文字资源，
+并可将处理好的古籍影印上传到 Internet Archive。全异步架构，插件式适配器设计。
 
 ## 技术栈
 - Python >= 3.10, 异步架构 (aiohttp + asyncio)
@@ -15,7 +16,9 @@ Bookget 是一个古籍数字资源下载与管理工具，支持从 50+ 个数�
 
 ```
 bookget/
-├── main.py                  # CLI 入口 (download/metadata/sites 三个命令)
+├── main.py                  # CLI 入口 (download/metadata/sites/upload 等命令)
+├── ia_upload.py             # Internet Archive 上传/修补/校验 (upload/ia-patch/ia-check)
+├── ia_metadata.py           # IA metadata 构建与校验（古籍 page-progression=rl 红线）
 ├── config.py                # 配置管理 (DownloadConfig, StorageConfig)
 ├── exceptions.py            # 异常体系 (15+ 自定义异常)
 ├── core/
@@ -48,6 +51,7 @@ bookget/
 - 核心基础设施: 完成
 - 14 个网站适配器: 完成
 - 文字资源支持: 部分实现
+- IA 上传 (`upload`/`ia-patch`/`ia-check`): 完成，`internetarchive` 为可选依赖 (`pip install bookget[ia]`)
 - 预处理管道 / 50+ 站点扩展: 计划中
 
 ## 开发约定

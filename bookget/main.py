@@ -8,6 +8,9 @@ Usage:
     python -m bookget metadata "URL" [--format json]
     python -m bookget sites --list
     python -m bookget sites --check "URL"
+    python -m bookget upload <identifier> <files...> [--metadata-file f]
+    python -m bookget ia-patch <identifier> [--set k=v]
+    python -m bookget ia-check <identifier>
 """
 
 import argparse
@@ -347,6 +350,24 @@ async def cmd_search(args, config: Config):
         await manager.close()
 
 
+def cmd_ia_upload(args):
+    """Handle upload command -- upload files to an Internet Archive item."""
+    from bookget.ia_upload import cmd_upload
+    cmd_upload(args)
+
+
+def cmd_ia_patch(args):
+    """Handle ia-patch command -- modify metadata of an existing IA item."""
+    from bookget.ia_upload import cmd_patch
+    cmd_patch(args)
+
+
+def cmd_ia_check(args):
+    """Handle ia-check command -- validate metadata of an existing IA item."""
+    from bookget.ia_upload import cmd_check
+    cmd_check(args)
+
+
 async def cmd_serve(args, config: Config):
     """Handle serve command — start HTTP server."""
     from bookget.server.app import run_server
@@ -595,6 +616,37 @@ def main():
     p_sites.add_argument("--check", type=str, help="Check if URL is supported")
     p_sites.add_argument("--json", action="store_true", help="Output JSON format")
 
+    # upload command (Internet Archive)
+    p_upload = subparsers.add_parser("upload", help="Upload files to an Internet Archive item")
+    p_upload.add_argument("identifier", help="IA identifier")
+    p_upload.add_argument("files", nargs="+", help="Files to upload")
+    p_upload.add_argument("--metadata-file", help="JSON/YAML file with IA metadata")
+    p_upload.add_argument("--set", action="append", metavar="K=V",
+                          help="Override a single metadata field, repeatable. "
+                               "e.g. --set title=... --set creator=曹霑")
+    p_upload.add_argument("--dry-run", action="store_true")
+    p_upload.add_argument("--force", action="store_true",
+                          help="Allow overwriting an existing item, purge stale PDFs")
+    p_upload.add_argument("--no-strict", action="store_true",
+                          help="Don't enforce guji page-progression=rl (non-guji use)")
+
+    # ia-patch command (Internet Archive)
+    p_ia_patch = subparsers.add_parser("ia-patch", help="Patch metadata of an existing IA item")
+    p_ia_patch.add_argument("identifier", help="IA identifier")
+    p_ia_patch.add_argument("--metadata-file", help="JSON/YAML file with IA metadata")
+    p_ia_patch.add_argument("--set", action="append", metavar="K=V")
+    p_ia_patch.add_argument("--dry-run", action="store_true")
+    p_ia_patch.add_argument("--no-strict", action="store_true")
+    p_ia_patch.add_argument("--skip-validate", action="store_true",
+                            help="Skip post-patch metadata validation")
+
+    # ia-check command (Internet Archive)
+    p_ia_check = subparsers.add_parser("ia-check", help="Validate metadata of an existing IA item")
+    p_ia_check.add_argument("identifier", help="IA identifier")
+    p_ia_check.add_argument("--no-strict", action="store_true")
+    p_ia_check.add_argument("--apply-defaults", action="store_true",
+                            help="Validate against metadata with defaults applied")
+
     # serve command
     p_serve = subparsers.add_parser("serve", help="Start HTTP server with web UI")
     p_serve.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind (default: 127.0.0.1)")
@@ -633,6 +685,12 @@ def main():
             asyncio.run(cmd_search(args, config))
         elif args.command == "sites":
             cmd_sites(args)
+        elif args.command == "upload":
+            cmd_ia_upload(args)
+        elif args.command == "ia-patch":
+            cmd_ia_patch(args)
+        elif args.command == "ia-check":
+            cmd_ia_check(args)
         elif args.command == "serve":
             if hasattr(args, 'output_dir') and args.output_dir:
                 config.storage.output_root = args.output_dir

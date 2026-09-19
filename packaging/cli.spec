@@ -26,12 +26,18 @@ a = Analysis(
         'bookget.models',
         'bookget.text_parsers',
         'bookget.text_converters',
+        'bookget.ia_upload',
+        'bookget.ia_metadata',
         'aiohttp',
         'aiohttp.web',
         'multidict',
         'yarl',
         'async_timeout',
         'charset_normalizer',
+        # optional: only present if built with `pip install bookget[ia]`;
+        # `bookget upload`/`ia-patch`/`ia-check` lazy-import it, so PyInstaller
+        # just warns (doesn't fail) when it's absent from the build env.
+        'internetarchive',
     ],
     hookspath=[],
     hooksconfig={},

@@ -11,6 +11,9 @@ cd bookget-py
 pip install -e ".[dev,browser]"
 playwright install chromium
 
+# 需要用到 Internet Archive 上传功能时再加装
+pip install -e ".[ia]"
+
 # 代码检查
 ruff check bookget/
 
@@ -23,6 +26,8 @@ pytest tests/
 ```
 bookget/
 ├── main.py                  # CLI 入口，命令解析，交互模式
+├── ia_upload.py             # Internet Archive 上传/修补/校验 (upload/ia-patch/ia-check)
+├── ia_metadata.py           # IA metadata 构建与校验（古籍 page-progression=rl 红线）
 ├── config.py                # 配置管理 (DownloadConfig, StorageConfig)
 ├── exceptions.py            # 异常体系 (15+ 自定义异常)
 ├── logger.py                # 日志配置
@@ -107,6 +112,28 @@ ResourceManager.download_incremental()
     ├── ImageDownloader.download() → 并行下载图片
     └── FileStorage.save()        → 保存到本地
 ```
+
+## 上传到 Internet Archive
+
+```bash
+pip install -e ".[ia]"
+ia configure --username <email> --password <pass>   # 写入 ~/.config/internetarchive/ia.ini
+
+# 上传（首次会强制校验 metadata，古籍必须 page-progression=rl）
+bookget upload <identifier> <file1.pdf> [<file2.pdf> ...] --metadata-file metadata.json
+bookget upload <identifier> <file.pdf> --set title=... --set creator=曹霑 --set date=1791
+
+# 修补已存在 item 的 metadata
+bookget ia-patch <identifier> --set description="..."
+
+# 只校验，不改动
+bookget ia-check <identifier>
+```
+
+`--metadata-file` 支持 JSON/YAML，字段规范与必填项见 `bookget/ia_metadata.py`
+（`REQUIRED_FIELDS`）。`--no-strict` 关闭古籍 `page-progression=rl` 硬约束（非古籍场景用）。
+下载 IA 上已有资源走标准 `bookget download <archive.org URL>`（`adapters/other/archive_org.py`），
+不在本命令范围内。
 
 ## 添加新网站适配器
 

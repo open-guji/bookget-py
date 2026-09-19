@@ -38,6 +38,9 @@ browser = [
 tiles = [
     "Pillow>=10.0",  # stitching Zoomify/DeepZoom tiled images (e.g. TNM)
 ]
+ia = [
+    "internetarchive>=4.0",  # `bookget upload` / `ia-patch` / `ia-check`
+]
 
 [project.scripts]
 bookget = "bookget.main:_safe_main"

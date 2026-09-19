@@ -41,6 +41,8 @@ a = Analysis(
         'bookget.server.tasks',
         'bookget.text_parsers',
         'bookget.text_converters',
+        'bookget.ia_upload',
+        'bookget.ia_metadata',
         'aiohttp',
         'aiohttp.web',
         'aiohttp.web_middlewares',
@@ -48,6 +50,8 @@ a = Analysis(
         'yarl',
         'async_timeout',
         'charset_normalizer',
+        # optional: see cli.spec comment
+        'internetarchive',
     ],
     hookspath=[],
     hooksconfig={},
