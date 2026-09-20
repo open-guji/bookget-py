@@ -161,6 +161,12 @@ items:
     min_images: 400
     title_contains: "毛詩疏"
 
+  - site_id: nomfoundation
+    url: "https://lib.nomfoundation.org/collection/1/volume/1001"
+    kind: images
+    min_images: 60
+    title_contains: "欽定詠史"
+
   - site_id: idp
     url: "http://idp.bbaw.de/database/oo_scroll_h.a4d?uid=5475972796;bst=1;recnum=69129;index=1;img=1"
     kind: images
