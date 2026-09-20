@@ -517,7 +517,12 @@ P0（资源覆盖率匹配）已在本档下方 Phase 1-4 的既有工作中体�
 
 ### 📋 grind 站（未落地，结构线索）
 - **广州大典** gzdd.gzlib.org.cn：可达；`api/Search/Detail` 元数据免登录，`api/Search/ReadBook` 页图 **401 需 Bearer+fingerprint（登录）** → 登录阶段
-- **早稻田** wul.waseda.ac.jp/kotenseki：**纯逐页 JPG，无 PDF**（whole/per-vol PDF 均 404）。图 `archive.wul.waseda.ac.jp/kosho/{grp}/{id}/{id}_{vol:04d}/{id}_{vol}_p{page:04d}s.jpg`（`s`=小图）；冊数在页面（如「4冊」）但**每冊页数 JS 视viewer 端、archive 主机禁 CORS** → 需逐页探 404 或找索引，grind
+- ~~**早稻田** wul.waseda.ac.jp/kotenseki：grind~~ **翻案，已完成 2026-09-20**：
+  根本不用逐页探。archive 主机的**书级目录页可列**（`kosho/{grp}/{id}/`），
+  列出每一册的 `{册}.html` 与 `{册}.pdf`；册 HTML 里**显式列出每一页的全尺寸
+  jpg**（去掉文件名末尾的 `s` 就是全尺寸，265KB vs 15KB）。
+  旧档记的「per-vol PDF 均 404」也不成立——实测册 PDF 44.5MB 可下。
+  实测：群書一覧 6 冊 715 图、近代著述目録 5 冊 290 图
 - **庆应 dcollections**：manifest `dcollections.lib.keio.ac.jp/sites/default/files/iiif/{grp}/{id}/manifest.json`（IIIF v2，已验证有效，如 `TKU/Ud0026`）。但 item viewer 是 SPA、item 链接 JS 隐藏，detail URL→id 抓不到。**注意：generic_iiif 已能直接吃 Keio 的 manifest URL**，专属适配器只为 detail URL，价值有限
 - **教训**：SPA 站从沙箱「翻列表找 item」基本走不通（CUHK/HKU/Keio/广州大典列表都如此）。**最快路径＝用户直接给真实 item/viewer URL**（HKUST/台湾/khirin 都是这样一次过的）
 

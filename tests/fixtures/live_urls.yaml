@@ -167,6 +167,12 @@ items:
     min_images: 60
     title_contains: "欽定詠史"
 
+  - site_id: waseda
+    url: "https://www.wul.waseda.ac.jp/kotenseki/html/bunko01/bunko01_01504/index.html"
+    kind: images
+    min_images: 250
+    title_contains: "近代著述目録"
+
   - site_id: idp
     url: "http://idp.bbaw.de/database/oo_scroll_h.a4d?uid=5475972796;bst=1;recnum=69129;index=1;img=1"
     kind: images
