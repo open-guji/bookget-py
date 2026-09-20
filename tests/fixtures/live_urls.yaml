@@ -136,6 +136,13 @@ items:
     title_contains: "西北文献"
 
   # --- Non-IIIF image sites ---
+  - site_id: utokyo_shanben
+    url: "https://shanben.ioc.u-tokyo.ac.jp/main_p.php?nu=A000600&order=rn_no&no=00015&tim=hb"
+    kind: images
+    min_images: 1
+    title_contains: "十三經註疏"
+    # PDF-only 站：按本仓惯例（同 nlc_read），PDF 也从 get_image_list 返回
+
   - site_id: idp
     url: "http://idp.bbaw.de/database/oo_scroll_h.a4d?uid=5475972796;bst=1;recnum=69129;index=1;img=1"
     kind: images

@@ -25,6 +25,11 @@ sites:
       - "https://searchworks.stanford.edu/view/bb123cd4567"
       - "https://purl.stanford.edu/wd297xz1362"
 
+  - site_id: utokyo_shanben
+    urls:
+      - "https://shanben.ioc.u-tokyo.ac.jp/main_p.php?nu=A000600&order=rn_no&no=00015&tim=hb"
+      - "https://shanben.ioc.u-tokyo.ac.jp/main_p.php?nu=A000500"
+
   - site_id: idp
     urls:
       - "http://idp.bbaw.de/database/oo_scroll_h.a4d?uid=5475972796;bst=1;recnum=69129;index=1;img=1"

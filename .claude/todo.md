@@ -30,9 +30,11 @@
 - **NLC 其余子站**：`mylib.nlc.cn`、`ouroots.nlc.cn`、`idp.nlc.cn`
   （我们只做了 `guji.nlc.cn` 与 `read.nlc.cn`）
 
-### A2. 日本（9）
+### A2. 日本（9 → 8）
 早稻田 `archive.wul.waseda.ac.jp`（旧档记为 grind，需逐页探）、
-东大东文研 `shanben.ioc.u-tokyo.ac.jp`、宫内厅/庆应 `db2.sido.keio.ac.jp`、
+~~东大东文研 `shanben.ioc.u-tokyo.ac.jp`~~ **已完成 2026-09-20**（PDF-only 站，
+整册 PDF 19MB 实测通过；逐页图存在但站点不给索引，要逐页探 404，故不做）、
+宫内厅/庆应 `db2.sido.keio.ac.jp`、
 京大人文研 `kanji.zinbun.kyoto-u.ac.jp`、駒澤 `repo.komazawa-u.ac.jp`、
 关西大 `www.iiif.ku-orcas.kansai-u.ac.jp`、国立公文書館
 `www.digital.archives.go.jp`、米沢 `www.library.yonezawa.yamagata.jp`、
@@ -133,8 +135,14 @@ UI 只暴露了 discover / download / expand / cancel / delete，
 1. ~~**先修不工作的**~~：进行中——archive_org 已修、Berkeley 查实为整站 WAF、
    princeton 已修、live 从 20 补到 26 条（见 B 节）
 2. ~~**IDP 一个适配器吃掉 7 个域名**~~ **已完成 2026-09-20**
-3. **中国大陆一批**：天一阁、深圳、山东、甘肃、温州、南大、央美
-   （本机可直接验证；广州大典需登录态，单列）
+3. **中国大陆一批**：⚠️ **沙箱做不了，2026-09-20 实测**——天一阁/深圳/山东/
+   甘肃/温州/央美/mylib/ouroots **从海外沙箱一律连不上**；可达的两个里，
+   广州大典与**南大都要登录**（南大 `/portal/book/view` 直接回
+   `{"code":10006,"message":"用户未登录"}`，且 bookId 是加密的，
+   `getBookById` 报「解码失败」）。这批得在本机做，或先做登录态支持
+4. **日本可达站**（沙箱实测可达，优先级提上来）：国立公文書館
+   `www.digital.archives.go.jp`、関西大 KU-ORCAS、宫内厅/庆应
+   `db2.sido.keio.ac.jp`、米沢。京大人文研/駒澤/奎章阁沙箱连不上
 4. **NLC 其余子站**：mylib / ouroots / idp（同一机构，可复用会话逻辑）
 5. **UI 补 search/match**（后端已就绪，纯前端工作）
 6. 日本/韩国余下站点（多为 IIIF，单站成本低，但需真实 item URL）
