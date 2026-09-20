@@ -6,7 +6,7 @@
 
 ### 1. 预检查
 
-- 确认当前分支是 `master`，工作区干净（无未提交的改动）
+- 确认当前分支是 `main`，工作区干净（无未提交的改动）
 - 确认 `pyproject.toml` 中的 `version` 字段已更新为目标版本
 - 如果版本号未更新，先修改 `pyproject.toml` 并提交
 
@@ -25,11 +25,21 @@ git add pyproject.toml
 git commit -m "release: v$ARGUMENTS"
 ```
 
-### 3. 打 tag 并推送
+### 3. 发 tag 前先空跑一次 workflow
+
+tag 一旦推上去，PyPI 上传**不可撤销**（同版本号不能重传）。先手动触发一次
+验证构建链路——`pypi` / `release` 两个 job 都有 `if: startsWith(github.ref,
+'refs/tags/')` 守卫，手动触发只跑 `build`（三平台构建 + selftest 冒烟），
+不发布任何东西：
+
+在 https://github.com/open-guji/bookget-py/actions/workflows/release.yml
+点 "Run workflow"（分支选 `main`），等三个平台全绿再进行下一步。
+
+### 4. 打 tag 并推送
 
 ```bash
 git tag v$ARGUMENTS
-git push origin master --tags
+git push origin v$ARGUMENTS   # 只推 tag，不动分支
 ```
 
 推送 tag 后，GitHub Actions 会自动：
@@ -37,7 +47,7 @@ git push origin master --tags
 2. 构建 sdist + wheel 并发布到 PyPI（Trusted Publisher OIDC）
 3. 创建 GitHub Release，附带 6 个可执行文件
 
-### 4. 验证
+### 5. 验证
 
 - GitHub Actions 构建页面：`https://github.com/open-guji/bookget-py/actions`
 - Release 页面：`https://github.com/open-guji/bookget-py/releases/tag/v$ARGUMENTS`
