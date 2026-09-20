@@ -100,6 +100,17 @@ class BaseIIIFAdapter(BaseSiteAdapter):
         Parse metadata from IIIF manifest.
         Override in subclasses for site-specific parsing.
         """
+        # A non-JSON response (e.g. an HTML holding page, or HTTP 202) makes
+        # .json() return None, and every access below then blew up with a bare
+        # "AttributeError: 'NoneType' object has no attribute 'get'" — which
+        # tells the user nothing about which site or URL was at fault.
+        if not isinstance(manifest, dict):
+            raise MetadataExtractionError(
+                f"[{self.site_id}] IIIF manifest 不是有效的 JSON："
+                f"{self.get_manifest_url(book_id)}\n"
+                f"（站点可能改了 manifest 地址，或该条目需要登录）"
+            )
+
         metadata = BookMetadata(
             source_id=book_id,
             iiif_manifest_url=self.get_manifest_url(book_id),

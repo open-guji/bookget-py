@@ -823,3 +823,36 @@ class TestCTextTitleHtmlEntities:
             if "title_match.group(1)" in ln and "unescape" not in ln
         ]
         assert not title_lines, f"unescaped title extraction: {title_lines}"
+
+
+class TestIiifManifestRobustness:
+    """A non-JSON manifest response must not crash with a bare AttributeError.
+
+    Several sites answer HTTP 202 / an HTML holding page for what we think is
+    the manifest URL. aiohttp's .json(content_type=None) then yields None and
+    _parse_manifest_metadata blew up with
+        AttributeError: 'NoneType' object has no attribute 'get'
+    naming neither the site nor the URL. This affects every IIIF adapter.
+    """
+
+    def test_none_manifest_raises_actionable_error(self):
+        from bookget.adapters.registry import AdapterRegistry
+        from bookget.exceptions import MetadataExtractionError
+
+        cls = AdapterRegistry.get_by_id("berkeley")
+        adapter = cls()
+        with pytest.raises(MetadataExtractionError) as exc:
+            adapter._parse_manifest_metadata(None, "151223")
+        msg = str(exc.value)
+        assert "berkeley" in msg          # which site
+        assert "manifest" in msg.lower()  # and what went wrong
+
+    def test_non_dict_manifest_also_handled(self):
+        from bookget.adapters.registry import AdapterRegistry
+        from bookget.exceptions import MetadataExtractionError
+
+        cls = AdapterRegistry.get_by_id("berkeley")
+        adapter = cls()
+        for bad in ("<html>not json</html>", [], 42):
+            with pytest.raises(MetadataExtractionError):
+                adapter._parse_manifest_metadata(bad, "1")
