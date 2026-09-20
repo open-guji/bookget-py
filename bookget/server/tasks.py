@@ -156,6 +156,7 @@ class TaskManager:
                     "site_domains": list(adapter.site_domains),
                     "supports_text": adapter.supports_text,
                     "supports_images": getattr(adapter, "supports_images", True),
+                    "supports_pdf": getattr(adapter, "supports_pdf", False),
                 },
             }
         return {"supported": False}

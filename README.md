@@ -8,66 +8,65 @@
 
 ### 中国大陆
 
-| 网站 | 域名 | 图片 | 文字 | 搜索 |
-|------|------|:----:|:----:|:----:|
-| 中华古籍智慧化服务平台 | `guji.nlc.cn` | ✓ | ✓ |  |
-| 中國國家圖書館·讀者雲門戶 | `read.nlc.cn` | ✓ |  |  |
-| 识典古籍 | `shidianguji.com` | ✓ | ✓ | ✓ |
-| 中国哲学书电子化计划 (CText) | `ctext.org` | ✓ | ✓ | ✓ |
+| 网站 | 域名 | 图片 | PDF | 文字 | 搜索 |
+|------|------|:----:|:---:|:----:|:----:|
+| 中华古籍智慧化服务平台 | `guji.nlc.cn` | ✓ |  | ✓ |  |
+| 中國國家圖書館·讀者雲門戶 | `read.nlc.cn` |  | ✓ |  |  |
+| 识典古籍 | `shidianguji.com` | ✓ |  | ✓ | ✓ |
+| 中国哲学书电子化计划 (CText) | `ctext.org` | ✓ |  | ✓ | ✓ |
 
 ### 日本
 
-| 网站 | 域名 | 图片 | 文字 | 搜索 |
-|------|------|:----:|:----:|:----:|
-| 国立国会図書館 (NDL) | `dl.ndl.go.jp` | ✓ |  |  |
-| 京都大学贵重资料数字档案馆 (Kyoto RMDA) | `rmda.kulib.kyoto-u.ac.jp` | ✓ |  |  |
-| 東京国立博物館 (TNM) | `webarchives.tnm.jp` | ✓ |  |  |
-| 国書データベース (NIJL Kokusho) | `kokusho.nijl.ac.jp` | ✓ |  |  |
-| 庆应义塾大学数字典藏 (Keio) | `dcollections.lib.keio.ac.jp` | ✓ |  |  |
-| 东洋文库 (Toyo Bunko / NII-DSR) | `dsr.nii.ac.jp` | ✓ |  |  |
-| e国宝 (e-Museum) | `emuseum.nich.go.jp` | ✓ |  |  |
-| 国立歴史民俗博物館 (khirin-a) | `khirin-a.rekihaku.ac.jp` | ✓ |  |  |
-| 龍谷大學圖書館 (Ryukoku) | `da.library.ryukoku.ac.jp` | ✓ |  |  |
+| 网站 | 域名 | 图片 | PDF | 文字 | 搜索 |
+|------|------|:----:|:---:|:----:|:----:|
+| 国立国会図書館 (NDL) | `dl.ndl.go.jp` | ✓ |  |  |  |
+| 京都大学贵重资料数字档案馆 (Kyoto RMDA) | `rmda.kulib.kyoto-u.ac.jp` | ✓ |  |  |  |
+| 東京国立博物館 (TNM) | `webarchives.tnm.jp` | ✓ |  |  |  |
+| 国書データベース (NIJL Kokusho) | `kokusho.nijl.ac.jp` | ✓ |  |  |  |
+| 庆应义塾大学数字典藏 (Keio) | `dcollections.lib.keio.ac.jp` | ✓ |  |  |  |
+| 东洋文库 (Toyo Bunko / NII-DSR) | `dsr.nii.ac.jp` | ✓ |  |  |  |
+| e国宝 (e-Museum) | `emuseum.nich.go.jp` | ✓ |  |  |  |
+| 国立歴史民俗博物館 (khirin-a) | `khirin-a.rekihaku.ac.jp` | ✓ |  |  |  |
+| 龍谷大學圖書館 (Ryukoku) | `da.library.ryukoku.ac.jp` | ✓ |  |  |  |
 
 ### 港台
 
-| 网站 | 域名 | 图片 | 文字 | 搜索 |
-|------|------|:----:|:----:|:----:|
-| 臺灣國家圖書館 (NCL Taiwan, rbook.ncl.edu.tw) | `rbook.ncl.edu.tw` | ✓ |  |  |
-| 臺灣故宮博物院 (NPM Taipei) | `digitalarchive.npm.gov.tw` | ✓ |  |  |
-| 漢籍全文資料庫 (Hanchi) | `hanchi.ihp.sinica.edu.tw` |  | ✓ |  |
-| 臺灣華文電子書庫 | `taiwanebook.ncl.edu.tw` | ✓ |  |  |
-| 香港大学数字图书馆 (HKU) | `digitalrepository.lib.hku.hk` | ✓ |  |  |
-| 香港科技大学图书馆 (HKUST) | `lbezone.hkust.edu.hk` | ✓ |  |  |
+| 网站 | 域名 | 图片 | PDF | 文字 | 搜索 |
+|------|------|:----:|:---:|:----:|:----:|
+| 臺灣國家圖書館 (NCL Taiwan, rbook.ncl.edu.tw) | `rbook.ncl.edu.tw` | ✓ |  |  |  |
+| 臺灣故宮博物院 (NPM Taipei) | `digitalarchive.npm.gov.tw` | ✓ |  |  |  |
+| 漢籍全文資料庫 (Hanchi) | `hanchi.ihp.sinica.edu.tw` |  |  | ✓ |  |
+| 臺灣華文電子書庫 | `taiwanebook.ncl.edu.tw` | ✓ | ✓ |  |  |
+| 香港大学数字图书馆 (HKU) | `digitalrepository.lib.hku.hk` | ✓ |  |  |  |
+| 香港科技大学图书馆 (HKUST) | `lbezone.hkust.edu.hk` | ✓ |  |  |  |
 
 ### 欧美图书馆
 
-| 网站 | 域名 | 图片 | 文字 | 搜索 |
-|------|------|:----:|:----:|:----:|
-| 哈佛大学图书馆 (Harvard) | `curiosity.lib.harvard.edu` | ✓ |  |  |
-| 普林斯顿大学图书馆 (Princeton) | `dpul.princeton.edu` | ✓ |  |  |
-| 斯坦福大学图书馆 (Stanford) | `searchworks.stanford.edu` | ✓ |  |  |
-| 柏克莱加州大学东亚图书馆 (Berkeley) | `digicoll.lib.berkeley.edu` | ✓ |  |  |
-| 美国国会图书馆 (Library of Congress) | `loc.gov` | ✓ |  |  |
-| 牛津大学博德利图书馆 (Bodleian) | `digital.bodleian.ox.ac.uk` | ✓ |  |  |
-| 剑桥大学数字图书馆 (CUDL) | `cudl.lib.cam.ac.uk` | ✓ |  |  |
-| 梵蒂冈宗座图书馆 (DigiVatlib) | `digi.vatlib.it` | ✓ |  |  |
-| 大英图书馆 (British Library) | `bl.uk` | ✓ |  |  |
-| 法国国家图书馆 (BnF Gallica) | `gallica.bnf.fr` | ✓ |  |  |
-| 柏林国立图书馆 (Staatsbibliothek zu Berlin) | `digital.staatsbibliothek-berlin.de` | ✓ |  |  |
-| 巴伐利亚州立图书馆 (BSB) | `digitale-sammlungen.de` | ✓ |  |  |
-| 奥地利国家图书馆 (ONB) | `viewer.onb.ac.at` | ✓ |  |  |
-| 史密森尼学会 (Smithsonian) | `ids.si.edu` | ✓ |  |  |
+| 网站 | 域名 | 图片 | PDF | 文字 | 搜索 |
+|------|------|:----:|:---:|:----:|:----:|
+| 哈佛大学图书馆 (Harvard) | `curiosity.lib.harvard.edu` | ✓ |  |  |  |
+| 普林斯顿大学图书馆 (Princeton) | `dpul.princeton.edu` | ✓ |  |  |  |
+| 斯坦福大学图书馆 (Stanford) | `searchworks.stanford.edu` | ✓ |  |  |  |
+| 柏克莱加州大学东亚图书馆 (Berkeley) | `digicoll.lib.berkeley.edu` | ✓ |  |  |  |
+| 美国国会图书馆 (Library of Congress) | `loc.gov` | ✓ |  |  |  |
+| 牛津大学博德利图书馆 (Bodleian) | `digital.bodleian.ox.ac.uk` | ✓ |  |  |  |
+| 剑桥大学数字图书馆 (CUDL) | `cudl.lib.cam.ac.uk` | ✓ |  |  |  |
+| 梵蒂冈宗座图书馆 (DigiVatlib) | `digi.vatlib.it` | ✓ |  |  |  |
+| 大英图书馆 (British Library) | `bl.uk` | ✓ |  |  |  |
+| 法国国家图书馆 (BnF Gallica) | `gallica.bnf.fr` | ✓ |  |  |  |
+| 柏林国立图书馆 (Staatsbibliothek zu Berlin) | `digital.staatsbibliothek-berlin.de` | ✓ |  |  |  |
+| 巴伐利亚州立图书馆 (BSB) | `digitale-sammlungen.de` | ✓ |  |  |  |
+| 奥地利国家图书馆 (ONB) | `viewer.onb.ac.at` | ✓ |  |  |  |
+| 史密森尼学会 (Smithsonian) | `ids.si.edu` | ✓ |  |  |  |
 
 ### 通用
 
-| 网站 | 域名 | 图片 | 文字 | 搜索 |
-|------|------|:----:|:----:|:----:|
-| 维基共享资源 | `commons.wikimedia.org` | ✓ |  | ✓ |
-| 维基文库 | `zh.wikisource.org` |  | ✓ | ✓ |
-| Internet Archive | `archive.org` | ✓ |  |  |
-| Generic IIIF | 任意 IIIF Manifest URL | ✓ |  |  |
-
+| 网站 | 域名 | 图片 | PDF | 文字 | 搜索 |
+|------|------|:----:|:---:|:----:|:----:|
+| 维基共享资源 | `commons.wikimedia.org` | ✓ |  |  | ✓ |
+| 维基文库 | `zh.wikisource.org` |  |  | ✓ | ✓ |
+| Internet Archive | `archive.org` | ✓ | ✓ |  |  |
+| Generic IIIF | 任意 IIIF Manifest URL | ✓ |  |  |  |
 ## 安装
 
 ### 方式一：下载可执行文件（推荐）

@@ -286,8 +286,11 @@ class BaseSiteAdapter(ABC):
             status=NodeStatus.DISCOVERED,
         )
 
-        # Group images by volume
-        if self.supports_images:
+        # Group images by volume.
+        # get_image_list() is also what PDF-only sites return their files from
+        # (nlc_read, taiwan_ebook), so gating on supports_images alone made
+        # those sites discover an empty manifest.
+        if self.supports_images or self.supports_pdf:
             images = await self.get_image_list(book_id)
             if images:
                 volumes: dict[str, list] = {}

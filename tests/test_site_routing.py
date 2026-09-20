@@ -65,3 +65,30 @@ def test_fixture_covers_all_routable_adapters():
     registered = {a["id"] for a in AdapterRegistry.list_adapters()}
     missing = registered - fixture_ids - exempt
     assert not missing, f"adapters without a site_urls.yaml entry: {sorted(missing)}"
+
+
+class TestPdfOnlyAdaptersAreDiscoverable:
+    """PDF-only sites must not be skipped by manifest discovery.
+
+    `BaseSiteAdapter.discover` used to gate the file listing on
+    supports_images alone, but PDF-only sites (nlc_read) return their files
+    from the same get_image_list() while declaring supports_images = False,
+    so they discovered an empty manifest.
+    """
+
+    def test_nlc_read_declares_pdf_not_images(self):
+        cls = AdapterRegistry.get_by_id("nlc_read")
+        assert cls is not None
+        assert cls.supports_pdf is True
+        assert cls.supports_images is False
+
+    def test_every_adapter_offers_something_downloadable(self):
+        # An adapter that declares none of these would silently discover
+        # nothing at all.
+        for info in AdapterRegistry.list_adapters():
+            cls = AdapterRegistry.get_by_id(info["id"])
+            assert (
+                cls.supports_images
+                or cls.supports_pdf
+                or cls.supports_text
+            ), f"{info['id']} declares no downloadable resource type"
