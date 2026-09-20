@@ -682,6 +682,7 @@ class ResourceManager:
                             'title': node.title,
                             'completed': completed,
                             'total': total,
+                            'manifest': manifest,
                         })
                     # Scale per-node timeout by expected work: a base allowance
                     # plus 8s per item (covers slow IIIF tile servers and big
@@ -756,6 +757,10 @@ class ResourceManager:
                                 'title': node.title,
                                 'completed': completed,
                                 'total': total,
+                                # The live manifest: node statuses have just
+                                # changed, and the caller's copy is stale until
+                                # download_incremental() returns.
+                                'manifest': manifest,
                             })
                     return success
 

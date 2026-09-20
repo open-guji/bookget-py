@@ -24,11 +24,16 @@ class EventBus:
             pass
 
     def publish(self, event_type: str, data: dict):
-        """Push an event to all subscribers."""
+        """Push an event to all subscribers.
+
+        Each subscriber gets its own shallow copy: handing the same dict to
+        every queue means one consumer mutating it (popping "type", say)
+        corrupts the event for all the others.
+        """
         msg = {"type": event_type, **data}
         for q in list(self._queues):
             try:
-                q.put_nowait(msg)
+                q.put_nowait(dict(msg))
             except asyncio.QueueFull:
                 pass  # Drop event if queue is full
 
@@ -79,8 +84,15 @@ async def sse_stream(
                 event = await asyncio.wait_for(q.get(), timeout=30.0)
                 if filter_task_id and event.get("taskId") != filter_task_id:
                     continue
-                event_type = event.pop("type", "message")
-                msg = make_sse_data(event_type, event)
+                # Do NOT pop from `event`: publish() hands the *same* dict to
+                # every subscriber's queue, so popping here stripped "type"
+                # for everyone else. Those streams then fell back to the
+                # generic "message" event name, which the frontend does not
+                # listen for — so the UI silently stopped updating (volume
+                # statuses only refreshed on a manual 发现结构).
+                event_type = event.get("type", "message")
+                payload = {k: v for k, v in event.items() if k != "type"}
+                msg = make_sse_data(event_type, payload)
                 await response.write(msg.encode("utf-8"))
             except asyncio.TimeoutError:
                 # Keepalive ping

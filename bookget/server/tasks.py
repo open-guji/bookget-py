@@ -185,13 +185,24 @@ class TaskManager:
             })
 
         def status_cb(event_type: str, data: dict):
-            if event_type in ("downloaded", "expanded"):
-                # Re-emit manifest after each node
-                if info.manifest:
-                    self.bus.publish("manifest_updated", {
-                        "taskId": task_id,
-                        "manifest": info.manifest.to_dict(),
-                    })
+            if event_type not in ("downloading", "downloaded", "expanded"):
+                return
+            # Prefer the LIVE manifest carried on the event. info.manifest is
+            # only assigned after download_incremental() returns, so using it
+            # here re-published the stale discovery-time copy and every volume
+            # stayed "待下载" in the UI until the user hit 发现结构 again.
+            live = data.get("manifest")
+            manifest_obj = live if live is not None else info.manifest
+            if manifest_obj is None:
+                return
+            # Keep the task's own copy current too, so /api/tasks reflects
+            # in-flight state rather than lagging a whole run behind.
+            if live is not None:
+                info.manifest = live
+            self.bus.publish("manifest_updated", {
+                "taskId": task_id,
+                "manifest": manifest_obj.to_dict(),
+            })
 
         try:
             manifest = await manager.download_incremental(
