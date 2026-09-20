@@ -1,3 +1,102 @@
+# 下一个版本（v0.5.0）盘点：功能缺口与站点对齐
+
+> 2026-09-20 实测盘点。目标：**发布时功能尽量完整**，并向上游
+> deweizhu/bookget（Go，1779 star）的站点覆盖对齐。
+> 数据来源：上游 `router/interface.go` 的域名路由表（74 个域名）+
+> 本仓运行期 `AdapterRegistry`，非文档转述。
+
+## A. 站点覆盖：按**域名**比对（决定用户的 URL 能不能用）
+
+| | 数 |
+|---|---|
+| 上游路由的域名 | **74** |
+| 我们能路由 | **29** |
+| **路由不了** | **45** |
+| 我们有、上游没有 | 11（ctext / 识典 / 维基文库 / 维基共享 / 漢籍 / 梵蒂冈 / 剑桥 CUDL / BnF / 斯坦福 / 台北故宫 / generic_iiif）|
+
+> 注意：不是「37 vs 58」这么简单——同一个站上游常路由多个域名
+> （如 IDP 有 7 个镜像域、NLC 有 4 个子站），按域名算才反映真实可用性。
+
+### A1. 中国大陆（17 个域名缺失）— **优先级最高**
+最贴近古籍索引录入，且本机网络可直接验证。
+- 天一阁 `gj.tianyige.com.cn`
+- 广州大典 `gzdd.gzlib.gov.cn` / `gzdd.gzlib.org.cn`（**需登录态**，旧档已记）
+- 深圳 `yun.szlib.org.cn`、山东 `guji.sdlib.com`、甘肃 `zszy.gslib.com.cn`
+- 温州 `oyjy.wzlib.cn` / `arcgxhpv7cw0.db.wzlib.cn`
+- 山东中医药大学 `gjsztsg.sdutcm.edu.cn`、南京大学 `jsgxgj.nju.edu.cn`
+- 中央美院 `dlib.cafa.edu.cn` / `dlibgate.cafa.edu.cn`
+- 云南方志 `dfz.yn.gov.cn`、近代史 `www.modernhistory.org.cn`
+- 国家哲社 `www.ncpssd.cn` / `.org`
+- **NLC 其余子站**：`mylib.nlc.cn`、`ouroots.nlc.cn`、`idp.nlc.cn`
+  （我们只做了 `guji.nlc.cn` 与 `read.nlc.cn`）
+
+### A2. 日本（9）
+早稻田 `archive.wul.waseda.ac.jp`（旧档记为 grind，需逐页探）、
+东大东文研 `shanben.ioc.u-tokyo.ac.jp`、宫内厅/庆应 `db2.sido.keio.ac.jp`、
+京大人文研 `kanji.zinbun.kyoto-u.ac.jp`、駒澤 `repo.komazawa-u.ac.jp`、
+关西大 `www.iiif.ku-orcas.kansai-u.ac.jp`、国立公文書館
+`www.digital.archives.go.jp`、米沢 `www.library.yonezawa.yamagata.jp`、
+龙谷 IDP `idp.afc.ryukoku.ac.jp`
+
+### A3. 韩国（4）· 港台（1）· 越南（1）· 俄罗斯（2）
+奎章阁 `kyudb.snu.ac.kr`、高丽大 `kostma.korea.ac.kr` / `idp.korea.ac.kr`、
+韩国国立中央图书馆 `lod.nl.go.kr`；香港中文 `repository.lib.cuhk.edu.hk`
+（**WAF 全拦**，旧档已记）；越南汉喃 `hannom.nlv.gov.vn`；
+俄罗斯国立图书馆 `viewer.rsl.ru`、`idp.orientalstudies.ru`
+
+### A4. 欧美/其他（11）
+**IDP 国际敦煌项目**是个大头：上游路由 7 个镜像域
+（`idp.bl.uk` / `idp.bnf.fr` / `idp.bbaw.de` / `idp.nlc.cn` /
+`idp.korea.ac.kr` / `idp.afc.ryukoku.ac.jp` / `idp.orientalstudies.ru`），
+做一个适配器即可全覆盖，**性价比最高**。
+其余：HathiTrust `babel.hathitrust.org`、FamilySearch（需登录）、
+史密森 `asia.si.edu` / `www.si.edu`（我们只做了 `ids.si.edu`）、
+普林斯顿 catalog 域、喃遗产 `lib.nomfoundation.org`
+
+## B. 已知不工作 / 未验证（比加新站更该先办）
+
+- [ ] **Berkeley manifest 模板是错的**：`digicoll.lib.berkeley.edu/iiif/{id}/manifest.json`
+      返回 HTTP 202 而非 JSON，该适配器**从来没成功过**。
+      （2026-09-20 已让报错可读，但模板仍需用 chrome-mcp 抓真实 manifest 反推）
+- [ ] **17 个适配器从未做过 live 验证**（`live_urls.yaml` 只登记了 20/37）：
+      archive_org、berkeley、bnf_gallica、british_library、generic_iiif、
+      hanchi、harvard、hku、kyoto_rmda、ncl_rbook、nlc_guji、nlc_read、
+      npm_taipei、princeton、shidianguji、stanford、wikimedia_commons。
+      **发布前应逐个拿真实 URL 跑通**——本轮抽查 10 个就有 1 个真 bug
+      （Berkeley）、1 个 0 图（archive_org 需确认取图逻辑）。
+- [ ] **archive_org 返回 0 图**：需确认是样本问题还是取图逻辑问题
+- [ ] **hku / cuhk 网络受限**：hku 用户与沙箱均访问不通；cuhk WAF 全拦
+
+## C. 功能缺口（UI 侧）
+
+UI 只暴露了 discover / download / expand / cancel / delete，
+**CLI 有而 UI 没有**：`search`、`match`、`metadata`、
+`upload` / `ia-patch` / `ia-check`（IA 上传三件套）。
+- [ ] UI 加「搜索」页：`search` + `match` 已有 API（4 个站支持搜索）
+- [ ] UI 加「上传到 IA」：三件套已完成，但只能命令行用
+
+## D. 文本能力偏薄
+`supports_text` 仅 5 个（ctext / 漢籍 / nlc_guji / 识典 / 维基文库）；
+上游多数站点也只做图。若要「文字资源」成为卖点，需单独立项，
+不属于 v0.5.0 的对齐目标。
+
+## E. 建议的 v0.5.0 范围（按性价比排序）
+
+1. **先修不工作的**：Berkeley 模板、archive_org 0 图、补齐 17 个 live 验证
+2. **IDP 一个适配器吃掉 7 个域名**（敦煌文献，学术价值高）
+3. **中国大陆一批**：天一阁、深圳、山东、甘肃、温州、南大、央美
+   （本机可直接验证；广州大典需登录态，单列）
+4. **NLC 其余子站**：mylib / ouroots / idp（同一机构，可复用会话逻辑）
+5. **UI 补 search/match**（后端已就绪，纯前端工作）
+6. 日本/韩国余下站点（多为 IIIF，单站成本低，但需真实 item URL）
+
+> **教训（勿忘）**：新增适配器必须同时登记
+> `tests/fixtures/site_urls.yaml`（覆盖率守卫会强制）+
+> `live_urls.yaml` 并本地 `pytest -m live` 真跑一次。
+> 本轮证明「适配器存在」不等于「适配器能用」。
+
+---
+
 # 下发任务（2026-09-19，来源：overview 盘点实测）
 
 > 2026-09-19 实测结论：本项目**代码走在前面、交付落在后面**。
