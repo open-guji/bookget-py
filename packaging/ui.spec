@@ -50,13 +50,22 @@ a = Analysis(
         'yarl',
         'async_timeout',
         'charset_normalizer',
+        # Hard dependency of bookget/shared/cjk_match (繁简/异体归一化).
+        # Missing it degrades matching silently, so it must be bundled.
+        'opencc',
+        # Zoomify tile stitching (TNM); imported lazily inside tiles.py.
+        'PIL',
+        'PIL.Image',
         # optional: see cli.spec comment
         'internetarchive',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'matplotlib', 'numpy', 'PIL', 'PyQt5', 'wx'],
+    # NOTE: PIL is NOT excluded — bookget/downloaders/tiles.py imports it
+    # (lazily) to stitch Zoomify tiles for TNM. Excluding it made that
+    # site fail only in the packaged exe, never in dev.
+    excludes=['tkinter', 'matplotlib', 'PyQt5', 'wx'],
     noarchive=False,
 )
 

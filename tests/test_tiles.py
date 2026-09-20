@@ -42,3 +42,37 @@ def test_single_tile_image():
     top, cols, rows, _ = zoomify_top_tier(200, 150, 256)
     assert (top, cols, rows) == (0, 1, 1)
     assert total_tiles(200, 150, 256) == 1
+
+
+class TestTiledAdaptersReachTheStitcher:
+    """Tile-based sites must work on the plain `download` path, not only --incremental.
+
+    TNM's Resource.url is a Zoomify tile-pyramid base; a bare GET returns 404.
+    The stitching lived only in download_node(), which just
+    download_incremental() called, so `bookget download <tnm-url>` failed
+    every page with "Resource not found". ResourceManager now delegates to an
+    adapter-provided fetch_resource() when present.
+    """
+
+    def test_tnm_provides_fetch_resource(self):
+        from bookget.adapters.registry import AdapterRegistry
+
+        cls = AdapterRegistry.get_by_id("tnm")
+        assert cls is not None
+        assert callable(getattr(cls, "fetch_resource", None))
+
+    def test_resource_manager_consults_fetch_resource(self):
+        import inspect
+        from bookget.core import resource_manager
+
+        src = inspect.getsource(resource_manager.ResourceManager._download_images)
+        assert "fetch_resource" in src, (
+            "_download_images must delegate to adapter.fetch_resource, "
+            "otherwise tiled sites 404 on the plain download path"
+        )
+
+    def test_book_id_is_recoverable_from_tiles_url(self):
+        # fetch_resource derives the book id from the tile base URL.
+        url = "https://webarchives.tnm.jp/dlib/img/1001/tiles/L0103216"
+        book_id = url.rsplit("/tiles/", 1)[0].rsplit("/img/", 1)[-1]
+        assert book_id == "1001"

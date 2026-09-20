@@ -2,6 +2,7 @@
 # https://ctext.org/
 
 import asyncio
+import html as html_mod
 import re
 from typing import List, Optional
 import aiohttp
@@ -277,7 +278,11 @@ class CTextAdapter(BaseSiteAdapter):
                 # Extract title from <title> tag
                 title_match = re.search(r'<title>([^<]+)</title>', html)
                 if title_match:
-                    title = title_match.group(1)
+                    # Unescape FIRST: CText serves the title as numeric HTML
+                    # entities (&#x8AD6;&#x8A9E;), so without this the title is
+                    # stored as literal entity text and the suffix-stripping
+                    # regex below never matches either.
+                    title = html_mod.unescape(title_match.group(1))
                     # Remove " - 中國哲學書電子化計劃" suffix
                     title = re.sub(r'\s*[-–]\s*中[國国]哲[學学].*$', '', title)
                     metadata.title = title.strip()
@@ -314,7 +319,6 @@ class CTextAdapter(BaseSiteAdapter):
                 # Title from <title> tag
                 title_match = re.search(r'<title>([^<]+)</title>', html)
                 if title_match:
-                    import html as html_mod
                     title = html_mod.unescape(title_match.group(1))
                     title = re.sub(r'\s*[-–]\s*中[國国]哲[學学].*$', '', title)
                     metadata.title = title.strip()
@@ -567,7 +571,7 @@ class CTextAdapter(BaseSiteAdapter):
                     if title_match:
                         title = re.sub(
                             r'\s*[-–]\s*中[國国]哲[學学].*$', '',
-                            title_match.group(1)).strip()
+                            html_mod.unescape(title_match.group(1))).strip()
         except Exception:
             pass
 

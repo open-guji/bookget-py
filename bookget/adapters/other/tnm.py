@@ -120,6 +120,26 @@ class TNMAdapter(BaseSiteAdapter):
         logger.info(f"[tnm] {book_id}: {len(resources)} pages (Zoomify)")
         return resources
 
+    async def fetch_resource(self, resource: Resource, output_path: Path) -> bool:
+        """Stitch one page's Zoomify tiles into *output_path*.
+
+        Resource.url is a tile-pyramid base, not a fetchable image, so the
+        generic image downloader would just 404. ResourceManager calls this
+        when an adapter provides it, which is what makes the plain
+        `bookget download` path work for TNM (not only --incremental).
+        """
+        book_id = resource.url.rsplit("/tiles/", 1)[0].rsplit("/img/", 1)[-1]
+        await self._ensure_session(book_id)
+        session = await self.get_session()
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            return await download_zoomify_image(
+                session, resource.url, output_path, headers=self.get_headers())
+        except Exception as e:
+            logger.warning(f"[tnm] stitch failed {resource.url}: {e}")
+            return False
+
     async def download_node(
         self,
         book_id: str,

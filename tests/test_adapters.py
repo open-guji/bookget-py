@@ -785,3 +785,41 @@ class TestAdapterRegistryComprehensive:
         )
         assert adapter_class is not None
         assert adapter_class.site_id == "npm_taipei"
+
+
+class TestCTextTitleHtmlEntities:
+    """CText serves <title> as numeric HTML entities; they must be unescaped.
+
+    Without unescaping, metadata.title was stored as the literal string
+    '&#x8AD6;&#x8A9E; - &#x4E2D;...' — and because the suffix-stripping regex
+    matches real CJK, it never fired either, so the site-name suffix stayed on.
+    """
+
+    def test_unescape_then_strip_yields_clean_title(self):
+        import html as html_mod
+        import re
+
+        raw = ("&#x8AD6;&#x8A9E; - &#x4E2D;&#x570B;&#x54F2;&#x5B78;"
+               "&#x66F8;&#x96FB;&#x5B50;&#x5316;&#x8A08;&#x5283;")
+        title = html_mod.unescape(raw)
+        title = re.sub(r'\s*[-–]\s*中[國国]哲[學学].*$', '', title).strip()
+        assert title == "論語"
+
+    def test_adapter_exposes_module_level_html_helper(self):
+        # The fix relies on a module-level `import html as html_mod`; inside
+        # the methods a local variable named `html` holds the page source and
+        # would shadow the stdlib module.
+        from bookget.adapters.other import ctext
+        assert hasattr(ctext, "html_mod")
+
+    def test_no_bare_unescaped_title_assignment(self):
+        # Guard all three <title> extraction sites: each must unescape.
+        import inspect
+        from bookget.adapters.other import ctext
+
+        src = inspect.getsource(ctext)
+        title_lines = [
+            ln for ln in src.splitlines()
+            if "title_match.group(1)" in ln and "unescape" not in ln
+        ]
+        assert not title_lines, f"unescaped title extraction: {title_lines}"

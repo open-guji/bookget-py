@@ -179,6 +179,23 @@ class ResourceManager:
         done_set = set(state.get("images_done", []))
         failed_set = set(state.get("images_failed", []))
 
+        # Some adapters don't expose plainly fetchable image URLs. TNM's
+        # Resource.url is a Zoomify tile-pyramid base (a bare GET returns 404);
+        # the real image only exists once the tiles are stitched. Those
+        # adapters implement the stitching in download_node(), which until now
+        # only the --incremental path called — so plain `download` failed every
+        # page with "Resource not found". Ask the adapter for a per-resource
+        # fetcher and use it when there is one.
+        # Look the attribute up on the CLASS, not the instance: a Mock adapter
+        # (and any auto-attribute object) answers getattr() for every name, so
+        # an instance-level probe would wrongly route real downloads into a
+        # non-callable stub.
+        fetch_one = None
+        if hasattr(type(adapter), "fetch_resource"):
+            candidate = getattr(adapter, "fetch_resource", None)
+            if callable(candidate):
+                fetch_one = candidate
+
         async def download_one(resource: Resource) -> bool:
             filename = resource.get_filename()
             output_path = img_dir / filename
@@ -208,9 +225,15 @@ class ResourceManager:
                 await asyncio.sleep(request_delay)
 
             try:
-                success = await self.image_downloader.download_with_retry(
-                    resource, output_path, headers
-                )
+                if fetch_one is not None:
+                    # Adapter-specific fetch (e.g. TNM stitches Zoomify tiles).
+                    # resource.url is a tile-pyramid base, not a fetchable
+                    # image, so a plain GET would 404 every page.
+                    success = await fetch_one(resource, output_path)
+                else:
+                    success = await self.image_downloader.download_with_retry(
+                        resource, output_path, headers
+                    )
                 if success:
                     task.downloaded_count += 1
                     done_set.add(filename)

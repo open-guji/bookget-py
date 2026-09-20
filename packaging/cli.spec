@@ -34,6 +34,12 @@ a = Analysis(
         'yarl',
         'async_timeout',
         'charset_normalizer',
+        # Hard dependency of bookget/shared/cjk_match (繁简/异体归一化).
+        # Missing it degrades matching silently, so it must be bundled.
+        'opencc',
+        # Zoomify tile stitching (TNM); imported lazily inside tiles.py.
+        'PIL',
+        'PIL.Image',
         # optional: only present if built with `pip install bookget[ia]`;
         # `bookget upload`/`ia-patch`/`ia-check` lazy-import it, so PyInstaller
         # just warns (doesn't fail) when it's absent from the build env.
@@ -42,7 +48,10 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'matplotlib', 'numpy', 'PIL', 'PyQt5', 'wx'],
+    # NOTE: PIL is NOT excluded — bookget/downloaders/tiles.py imports it
+    # (lazily) to stitch Zoomify tiles for TNM. Excluding it made that
+    # site fail only in the packaged exe, never in dev.
+    excludes=['tkinter', 'matplotlib', 'PyQt5', 'wx'],
     noarchive=False,
 )
 
