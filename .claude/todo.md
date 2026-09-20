@@ -117,6 +117,53 @@ token 不是条目 id，只带 uid 会**静默返回另一件藏品**；上游 G
       实测 0→173、0→16，另一样本 90→90 不变；已登记 live_urls 并通过
 - [ ] **hku / cuhk 网络受限**：hku 用户与沙箱均访问不通；cuhk WAF 全拦
 
+## B1. 不可用站点总表（2026-09-20 沙箱实测，按性质分类）
+
+> 这张表的用途：**别再重复调查**。每条都是实测结论，不是推断。
+> 「沙箱受限」的几条在你本机（家用网络/大陆网络）很可能是通的，
+> 不要因为这里记了不通就把适配器删掉。
+
+### 站点自己死了（代码要重做，与网络无关）
+
+| 站点 | 症状 | 解除条件 |
+|---|---|---|
+| `british_library` | 适配器唯一依赖的 **api.bl.uk 全球 NXDOMAIN**（Google 公网 DNS 复核），旧 `/manuscripts/Viewer.aspx` 307 跳转到通用页 | 摸清 `iiif.bl.uk` 的新路径后重做；已让报错直说原因 |
+| `hkust` | 整站迁到 `digitalcollections.hkust.edu.hk`（CollectiveAccess）。manifest 入口是 `/service.php/IIIF/manifest/ca_objects:{内部ID}`（IIIF v3，可取），但图片 `representation:{id}:{n}` **403**（info.json 却 200），带 Referer/Origin/UA 均无效；且该对象只有 Ebook/Thumb 两个 representation，非逐页图 | 需反推图片 403 的凭据，可能要登录。属整站重写 |
+
+### 需要登录态（功能缺口，不是 bug）
+
+| 站点 | 症状 |
+|---|---|
+| 广州大典 `gzdd.gzlib.org.cn` | 可达；`api/Search/Detail` 元数据免登录，`api/Search/ReadBook` 页图 401 需 Bearer + fingerprint |
+| 南京大学 `jsgxgj.nju.edu.cn` | 可达；取图接口 `/portal/book/view` 直接回 `{"code":10006,"message":"用户未登录"}`，且 bookId 是加密的（`getBookById` 报「解码失败」） |
+
+### 站点反爬 / 封本沙箱 IP（本机大概率可用）
+
+| 站点 | 症状 |
+|---|---|
+| `berkeley` | 整站 **AWS WAF JS 挑战**：curl 拿 `202 + 空体 + x-amzn-waf-action: challenge`；无头 Chromium（CA 已导入 NSS）被 ELB **403** |
+| `harvard` | IIIF manifest 持续 **429**，非偶发 |
+| `stanford` | 检索站 searchworks 被 **F5 Shape**（TSPD）拦 + captcha；**但 manifest 主机 purl.stanford.edu 可达**，只缺一个真 druid |
+| `bnf_gallica` | manifest 500 / 403 / 连接被丢弃三种都撞到，基本是封 IP |
+| `cuhk` | WAF 全拦（旧档已记，本轮未复验） |
+| `idp.bl.uk` | Cloudflare **403**（IDP 其余镜像正常，柏林/国图已验证可用） |
+
+### 从海外沙箱连不上（纯网络位置问题）
+
+- 大陆：天一阁 `gj.tianyige.com.cn`、深圳 `yun.szlib.org.cn`、山东 `guji.sdlib.com`、
+  甘肃 `zszy.gslib.com.cn`、温州 `oyjy.wzlib.cn`、央美 `dlib.cafa.edu.cn`、
+  NLC 子站 `mylib.nlc.cn` / `ouroots.nlc.cn`
+- 日韩：京大人文研 `kanji.zinbun.kyoto-u.ac.jp`、駒澤 `repo.komazawa-u.ac.jp`、
+  奎章阁 `kyudb.snu.ac.kr`
+- IDP 镜像：俄罗斯 `idp.orientalstudies.ru`（503）、韩国 `idp.korea.ac.kr`（DNS 不解析）
+- `hku`：IIIF 主机可达但 catalog 主机连接被丢弃；且 fixture 里的 id 返回空 manifest
+  （**旧档记的「站点疑下线」已过时**）
+
+### 样本/资料不足，等你给一条真实 item URL
+
+`stanford`（一个 druid）、`npm_taipei`（首页 200 但 `/api/Painting/*`、
+`/Antique/setJsonU` 所有数据接口一律 500）、`hku`
+
 ## C. 功能缺口（UI 侧）
 
 UI 只暴露了 discover / download / expand / cancel / delete，
