@@ -638,13 +638,27 @@ async def cmd_serve(args, config: Config):
     else:
         print("  Frontend not built. Run: cd ui && npm run build:app")
 
-    runner, url = await run_server(
-        config=config,
-        host=args.host,
-        port=args.port,
-        static_dir=static_dir,
-        open_browser=not args.no_open,
-    )
+    try:
+        runner, url = await run_server(
+            config=config,
+            host=args.host,
+            port=args.port,
+            static_dir=static_dir,
+            open_browser=not args.no_open,
+        )
+    except OSError as e:
+        # errno 10048 (WSAEADDRINUSE) on Windows, 98 (EADDRINUSE) elsewhere.
+        # The raw message ("通常每个套接字地址...只允许使用一次") tells the
+        # user nothing actionable, so say what's actually wrong and how to fix.
+        if getattr(e, "errno", None) in (48, 98, 10048):
+            raise GujiResourceError(
+                f"端口 {args.port} 已被占用。\n"
+                f"多半是已经有一个 bookget 在运行了——"
+                f"先打开 http://{args.host}:{args.port} 看看。\n"
+                f"若要另起一个，请换端口："
+                f"bookget serve --port {args.port + 1}"
+            ) from e
+        raise
     print(f"  bookget server running at {url}")
     print("  Press Ctrl+C to stop.\n")
 
@@ -656,6 +670,31 @@ async def cmd_serve(args, config: Config):
         pass
     finally:
         await runner.cleanup()
+
+
+def _is_bookget_serving(host: str, port: int, timeout: float = 1.5) -> bool:
+    """True if a bookget server is already answering on host:port.
+
+    Used so a second launch of bookget-ui.exe opens the running UI instead of
+    failing to bind. Verified via the API rather than a bare port check, so an
+    unrelated service squatting on 8765 is not mistaken for ours (in that case
+    we fall through and surface the real bind error).
+    """
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(
+            f"http://{host}:{port}/api/sites", timeout=timeout
+        ) as resp:
+            if resp.status != 200:
+                return False
+            data = _json.loads(resp.read().decode("utf-8", "replace"))
+    except Exception:
+        return False
+    # /api/sites returns the adapter list; anything else isn't bookget.
+    return isinstance(data, list) and bool(data) and "id" in data[0]
 
 
 async def _interactive_mode():
@@ -687,6 +726,17 @@ async def _interactive_mode():
             port = 8765
             no_open = False
             output_dir = None
+
+        # Double-clicking the exe a second time used to die with a raw
+        # "[Errno 10048] ... 只允许使用一次" dialog, because the first instance
+        # still holds the port. That's not an error the user can act on —
+        # what they want is simply the UI. If an instance is already serving,
+        # open the browser at it and exit quietly.
+        if _is_bookget_serving(_FakeArgs.host, _FakeArgs.port):
+            import webbrowser
+            webbrowser.open(f"http://{_FakeArgs.host}:{_FakeArgs.port}")
+            return
+
         setup_logger(debug=False)
         config = Config.from_env()
         config.ensure_dirs()

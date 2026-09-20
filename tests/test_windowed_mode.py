@@ -162,3 +162,67 @@ class TestSetupLoggerWithoutConsole:
 
         monkeypatch.setattr(logger_mod.sys, "stdout", None)
         assert logger_mod._utf8_console_stream() is None
+
+
+class TestSecondLaunchDetection:
+    """Double-clicking bookget-ui.exe twice must not show a bind error.
+
+    The second launch used to die with a raw
+        [Errno 10048] ... 通常每个套接字地址...只允许使用一次
+    dialog. The user just wants the UI, so a running instance should be
+    detected and the browser pointed at it instead.
+    """
+
+    def test_no_server_returns_false(self):
+        from bookget.main import _is_bookget_serving
+        # Nothing is listening on this port.
+        assert _is_bookget_serving("127.0.0.1", 9, timeout=0.5) is False
+
+    def test_non_bookget_response_is_rejected(self, monkeypatch):
+        # A foreign service squatting on the port must NOT be treated as ours,
+        # otherwise we'd silently open a browser at someone else's app.
+        import bookget.main as m
+
+        class FakeResp:
+            status = 200
+
+            def read(self):
+                return b'{"hello": "not bookget"}'
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        monkeypatch.setattr(
+            "urllib.request.urlopen", lambda *a, **k: FakeResp())
+        assert m._is_bookget_serving("127.0.0.1", 8765) is False
+
+    def test_bookget_response_is_accepted(self, monkeypatch):
+        import bookget.main as m
+
+        class FakeResp:
+            status = 200
+
+            def read(self):
+                return b'[{"id": "ndl", "name": "NDL", "domains": []}]'
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        monkeypatch.setattr(
+            "urllib.request.urlopen", lambda *a, **k: FakeResp())
+        assert m._is_bookget_serving("127.0.0.1", 8765) is True
+
+    def test_connection_error_is_not_fatal(self, monkeypatch):
+        import bookget.main as m
+
+        def boom(*a, **k):
+            raise OSError("refused")
+
+        monkeypatch.setattr("urllib.request.urlopen", boom)
+        assert m._is_bookget_serving("127.0.0.1", 8765) is False
