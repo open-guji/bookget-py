@@ -24,12 +24,35 @@ import re
 import sys
 from pathlib import Path
 
-# Force UTF-8 stdout/stderr on Windows (avoids cp1252 encoding errors)
-# In windowed mode (PyInstaller console=False), stdout/stderr may be None
-if sys.stdout and sys.stdout.encoding != 'utf-8':
-    sys.stdout.reconfigure(encoding='utf-8')
-if sys.stderr and sys.stderr.encoding != 'utf-8':
-    sys.stderr.reconfigure(encoding='utf-8')
+def _force_utf8(stream) -> None:
+    """Best-effort switch of a std stream to UTF-8 (avoids cp1252 errors).
+
+    In a PyInstaller windowed build (console=False, as used by bookget-ui.exe)
+    the stream is not None but has no real console behind it: `.encoding` is
+    None and `.reconfigure()` raises
+    ``AttributeError: 'NoneType' object has no attribute 'encoding'``.
+    Testing only ``stream.encoding != 'utf-8'`` therefore passed and the
+    reconfigure blew up at import time — before any command ran — so
+    double-clicking bookget-ui.exe died with a "Fatal error" dialog.
+
+    Never let this be fatal: UTF-8 output is a nicety, not a reason to refuse
+    to start.
+    """
+    if stream is None:
+        return
+    try:
+        if getattr(stream, "encoding", None) == "utf-8":
+            return
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            return
+        reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+
+_force_utf8(sys.stdout)
+_force_utf8(sys.stderr)
 
 from bookget.config import Config
 from bookget.core.resource_manager import ResourceManager
@@ -641,8 +664,24 @@ async def _interactive_mode():
     When running as bookget-ui.exe (frozen, no console), auto-start serve.
     """
     import sys as _sys
+
+    def _has_console() -> bool:
+        """True only if there's a real interactive console to talk to.
+
+        In a windowed build stdout exists but has no console behind it, and
+        isatty() itself can raise — so probe defensively. Getting this wrong
+        means bookget-ui.exe would sit at an input() prompt nobody can see.
+        """
+        stream = _sys.stdout
+        if stream is None or getattr(stream, "encoding", None) is None:
+            return False
+        try:
+            return bool(stream.isatty())
+        except Exception:
+            return False
+
     # bookget-ui.exe: frozen + no console → just serve
-    if getattr(_sys, 'frozen', False) and (not _sys.stdout or not _sys.stdout.isatty()):
+    if getattr(_sys, 'frozen', False) and not _has_console():
         class _FakeArgs:
             host = "127.0.0.1"
             port = 8765
@@ -960,13 +999,18 @@ def _safe_main():
     except KeyboardInterrupt:
         sys.exit(130)
     except Exception as e:
-        # Print to stderr if available, otherwise show a message box on Windows
+        # Print to stderr if it actually goes somewhere, otherwise show a
+        # message box on Windows. In a windowed build sys.stderr is a live
+        # object with no console behind it, so a plain truthiness check sent
+        # the traceback into the void and the user saw nothing at all.
         msg = f"Fatal error: {e}"
-        if sys.stderr:
+        stderr_usable = sys.stderr is not None and getattr(
+            sys.stderr, "encoding", None) is not None
+        if stderr_usable:
             print(msg, file=sys.stderr)
             import traceback
             traceback.print_exc(file=sys.stderr)
-        elif sys.platform == "win32":
+        if not stderr_usable and sys.platform == "win32":
             # Windowed mode (no console): show a message box
             try:
                 import ctypes

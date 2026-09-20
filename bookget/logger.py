@@ -7,6 +7,27 @@ import sys
 logger = logging.getLogger("bookget")
 
 
+def _utf8_console_stream():
+    """Return a UTF-8 stream for console logging, or None if there is none.
+
+    Returns None in a windowed build (no console, no redirect), where
+    sys.stdout is None. Also tolerates streams that exist but have no real
+    file descriptor behind them, which `fileno()` reports by raising.
+    """
+    stream = sys.stdout
+    if stream is None:
+        return None
+    try:
+        if getattr(stream, "encoding", None) == "utf-8":
+            return stream
+        return open(stream.fileno(), mode="w", encoding="utf-8",
+                    closefd=False, newline="")
+    except Exception:
+        # No usable fd (redirected to a pipe we can't reopen, etc.) — fall
+        # back to the original stream rather than losing logging entirely.
+        return stream
+
+
 def setup_logger(debug: bool = False, log_file: str = None):
     """Configure the logger with appropriate handlers."""
     level = logging.DEBUG if debug else logging.INFO
@@ -15,17 +36,29 @@ def setup_logger(debug: bool = False, log_file: str = None):
     # Clear existing handlers
     logger.handlers.clear()
 
-    # Console handler (force UTF-8 on Windows to avoid cp1252 encoding errors)
-    stream = open(sys.stdout.fileno(), mode='w', encoding='utf-8',
-                  closefd=False, newline='') if sys.stdout.encoding != 'utf-8' else sys.stdout
-    console_handler = logging.StreamHandler(stream)
-    console_handler.setLevel(level)
-    console_format = logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(message)s",
-        datefmt="%H:%M:%S"
-    )
-    console_handler.setFormatter(console_format)
-    logger.addHandler(console_handler)
+    # Console handler (force UTF-8 on Windows to avoid cp1252 encoding errors).
+    #
+    # In a PyInstaller *windowed* build (console=False, i.e. bookget-ui.exe
+    # double-clicked) sys.stdout is None — there is no console and no redirect.
+    # Touching sys.stdout.encoding / .fileno() unguarded raised
+    #   AttributeError: 'NoneType' object has no attribute 'encoding'
+    # before the server ever started, so the app died with a "Fatal error"
+    # dialog. There is simply nowhere to log to in that case; skip the console
+    # handler instead of crashing.
+    stream = _utf8_console_stream()
+    if stream is not None:
+        console_handler = logging.StreamHandler(stream)
+        console_handler.setLevel(level)
+        console_format = logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(message)s",
+            datefmt="%H:%M:%S"
+        )
+        console_handler.setFormatter(console_format)
+        logger.addHandler(console_handler)
+    else:
+        # Keep logging calls cheap and silent rather than letting the root
+        # logger's lastResort handler write to a stderr that isn't there.
+        logger.addHandler(logging.NullHandler())
 
     # File handler (if specified)
     if log_file:

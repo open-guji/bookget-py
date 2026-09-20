@@ -75,6 +75,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+# bookget imports must come AFTER the UTF-8 stdout/stderr setup at the top of
+# main.py, otherwise anything they print at import time can hit cp1252.
+"bookget/main.py" = ["E402"]
 # Quoted forward-reference annotations to types these modules don't import
 # at runtime; harmless, and importing them would be circular.
 "bookget/adapters/base.py" = ["F821"]
