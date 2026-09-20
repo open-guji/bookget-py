@@ -84,12 +84,19 @@ class TaskManager:
         node_ids: list[str] | None = None,
         concurrency: int = 1,
         index_id: str = "",
+        task_id: str | None = None,
     ) -> str:
         """
         Start an incremental download task asynchronously.
         Returns task_id immediately; progress is pushed via EventBus.
+
+        `task_id` lets the caller supply its own id. The web UI keys its
+        manifests and progress bars by the id it already used for discovery,
+        so minting a fresh server-side id made every SSE event arrive under an
+        id the UI had never seen: node statuses never refreshed, and each run
+        added another progress bar that could not be matched to the old one.
         """
-        task_id = str(uuid.uuid4())[:8]
+        task_id = task_id or str(uuid.uuid4())[:8]
         info = TaskInfo(task_id=task_id, url=url, output_dir=output_dir)
         self._tasks[task_id] = info
 

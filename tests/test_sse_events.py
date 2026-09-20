@@ -86,3 +86,64 @@ class TestLiveManifestIsPublished:
 
         src = inspect.getsource(resource_manager.ResourceManager.download_incremental)
         assert "'manifest': manifest," in src
+
+
+class TestClientSuppliedTaskId:
+    """The server must adopt the caller's task id.
+
+    The web UI keys manifests and progress bars by the id it used for
+    discovery (manifest.book_id). start_download() used to mint its own uuid
+    and ignore the client's, so every SSE event arrived under an id the UI had
+    never seen. Two visible symptoms:
+      * node statuses never refreshed ("待下载" until 发现结构 was clicked);
+      * each run added ANOTHER progress bar, the older one frozen forever.
+    """
+
+    def test_supplied_id_is_used(self):
+        from bookget.config import Config
+        from bookget.server.sse import EventBus
+        from bookget.server.tasks import TaskManager
+
+        tm = TaskManager(Config(), EventBus())
+        # Avoid actually starting the coroutine: only the id matters here.
+        import asyncio
+
+        async def check():
+            tid = tm.start_download(
+                url="https://example.test/x",
+                output_dir=".",
+                task_id="2592420",
+            )
+            info = tm.get_task(tid)
+            if info and info.asyncio_task:
+                info.asyncio_task.cancel()
+            return tid
+
+        assert asyncio.run(check()) == "2592420"
+
+    def test_missing_id_still_gets_one(self):
+        import asyncio
+
+        from bookget.config import Config
+        from bookget.server.sse import EventBus
+        from bookget.server.tasks import TaskManager
+
+        tm = TaskManager(Config(), EventBus())
+
+        async def check():
+            tid = tm.start_download(url="https://example.test/x", output_dir=".")
+            info = tm.get_task(tid)
+            if info and info.asyncio_task:
+                info.asyncio_task.cancel()
+            return tid
+
+        tid = asyncio.run(check())
+        assert tid and isinstance(tid, str)
+
+    def test_route_forwards_client_task_id(self):
+        import inspect
+
+        from bookget.server import routes
+
+        src = inspect.getsource(routes.handle_start_download)
+        assert "task_id=client_task_id" in src

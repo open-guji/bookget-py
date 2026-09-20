@@ -107,6 +107,9 @@ async def handle_start_download(request: web.Request):
     output_dir = body.get("outputDir") or body.get("output_dir", "")
     node_ids = body.get("nodeIds") or body.get("node_ids")
     concurrency = int(body.get("concurrency", 1))
+    # Honour a client-supplied id so SSE events land on the task the caller is
+    # already tracking (the web UI keys everything by its discovery id).
+    client_task_id = body.get("taskId") or body.get("task_id") or None
     if not url:
         return _err("url is required")
     tm = request.app["task_manager"]
@@ -115,6 +118,7 @@ async def handle_start_download(request: web.Request):
         output_dir=output_dir or "./downloads",
         node_ids=node_ids,
         concurrency=concurrency,
+        task_id=client_task_id,
     )
     return _json({"taskId": task_id})
 
