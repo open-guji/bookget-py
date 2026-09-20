@@ -211,7 +211,7 @@ dependencies 和所有 extra 都没声明它。** 代码写了「OpenCC 缺失�
 - 或明确降级为 extra，但需在 search/match 路径给出显式 WARNING，不能静默
 - 修完三个测试应转绿；**不要改测试去迁就代码**
 
-### [~] 0.3 发 v0.4.0，把 18 个适配器交付给用户（**只差一条 tag 命令，需本人执行**）
+### [x] 0.3 发 v0.4.0，把 18 个适配器交付给用户（done 2026-09-20）
 这是对两个 issue 最直接的回应。
 - [x] 确认 release.yml 仍可跑：2026-09-20 用 workflow_dispatch 空跑 run #9，
       **三平台全绿**（构建 + selftest 冒烟 + 适配器计数 ≥37 + 批量下载 flag）。
@@ -220,16 +220,13 @@ dependencies 和所有 extra 都没声明它。** 代码写了「OpenCC 缺失�
 - [x] README 站点表已是 37 站（旧记录说「需从 19 更新」已过时）
 - [x] PyPI 侧已确认：`bookget` 项目存在（最新 0.3.4），Trusted Publisher 此前
       跑通过，0.4.0 未被占用
-- [ ] **打 tag 推送——沙箱做不了**：Claude 会话的 git 凭据只允许推指定的
-      `claude/*` 分支，推 tag ref 恒返回 **HTTP 403**（退避重试 5 次全同）；
-      代理 `recentRelayFailures` 为空，不是出网策略。GitHub MCP 也没有建
-      tag / 建 Release 的接口。**需本人在本地执行**：
-      ```bash
-      git fetch origin main
-      git tag -a v0.4.0 origin/main -m "v0.4.0"
-      git push origin v0.4.0      # 只推 tag，不动分支
-      ```
-- [ ] 发版后在 issue #1 / #2 下回复，告知新版本
+- [x] 打 tag 推送：**沙箱做不了，由本人执行**。Claude 会话的 git 凭据只允许推
+      指定的 `claude/*` 分支，推 tag ref 恒返回 **HTTP 403**（退避重试 5 次全同，
+      代理 `recentRelayFailures` 为空即非出网策略），GitHub MCP 也没有建 tag /
+      建 Release 的接口。**以后发版这一步都得本人来**，Claude 只能做到空跑验证为止
+- [x] tag 触发的 run #10 全绿（含 `pypi` job），Release 六个可执行文件齐全，
+      `pip install -U bookget` 可取到 0.4.0
+- [x] 已在 issue #1 / #2 下回复新版本（按本人意见**不关闭**，等提问者自己确认）
 
 ---
 
