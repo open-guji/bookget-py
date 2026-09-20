@@ -1,7 +1,7 @@
 # Search models for site adapter search functionality
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List
 
 
 @dataclass

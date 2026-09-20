@@ -11,10 +11,10 @@ def setup_logger(debug: bool = False, log_file: str = None):
     """Configure the logger with appropriate handlers."""
     level = logging.DEBUG if debug else logging.INFO
     logger.setLevel(level)
-    
+
     # Clear existing handlers
     logger.handlers.clear()
-    
+
     # Console handler (force UTF-8 on Windows to avoid cp1252 encoding errors)
     stream = open(sys.stdout.fileno(), mode='w', encoding='utf-8',
                   closefd=False, newline='') if sys.stdout.encoding != 'utf-8' else sys.stdout
@@ -26,7 +26,7 @@ def setup_logger(debug: bool = False, log_file: str = None):
     )
     console_handler.setFormatter(console_format)
     logger.addHandler(console_handler)
-    
+
     # File handler (if specified)
     if log_file:
         file_handler = logging.FileHandler(log_file, encoding="utf-8")
@@ -37,5 +37,5 @@ def setup_logger(debug: bool = False, log_file: str = None):
         )
         file_handler.setFormatter(file_format)
         logger.addHandler(file_handler)
-    
+
     return logger

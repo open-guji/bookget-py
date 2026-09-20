@@ -3,7 +3,7 @@
 import re
 import asyncio
 from typing import Dict, List, Optional, Any
-from urllib.parse import urlparse, parse_qs, urljoin
+from urllib.parse import urlparse, parse_qs
 import aiohttp
 
 
@@ -46,10 +46,10 @@ def sanitize_filename(name: str, max_length: int = 200) -> str:
     # Replace illegal characters
     illegal = r'[<>:"/\\|?*\x00-\x1f]'
     sanitized = re.sub(illegal, '_', name)
-    
+
     # Remove leading/trailing spaces and dots
     sanitized = sanitized.strip(' .')
-    
+
     # Limit length
     if len(sanitized) > max_length:
         # Keep extension if present
@@ -58,7 +58,7 @@ def sanitize_filename(name: str, max_length: int = 200) -> str:
             sanitized = base[:max_length - len(ext) - 1] + '.' + ext
         else:
             sanitized = sanitized[:max_length]
-    
+
     return sanitized or "unnamed"
 
 
@@ -71,7 +71,7 @@ def normalize_chinese_text(text: str) -> str:
     """
     # Basic normalization - remove extra whitespace
     text = re.sub(r'\s+', '', text)
-    
+
     # Common traditional/simplified variations
     replacements = {
         '臺': '台',
@@ -81,15 +81,15 @@ def normalize_chinese_text(text: str) -> str:
         '圖': '图',
         '學': '学',
     }
-    
+
     for trad, simp in replacements.items():
         text = text.replace(trad, simp)
-    
+
     return text
 
 
 async def fetch_json(
-    url: str, 
+    url: str,
     headers: Dict[str, str] = None,
     session: aiohttp.ClientSession = None
 ) -> Optional[Dict[str, Any]]:
@@ -99,19 +99,19 @@ async def fetch_json(
     Returns None on failure instead of raising exception.
     """
     close_session = session is None
-    
+
     try:
         if session is None:
             session = aiohttp.ClientSession()
-        
+
         async with session.get(url, headers=headers) as response:
             if response.status == 200:
                 return await response.json()
             return None
-            
+
     except Exception:
         return None
-        
+
     finally:
         if close_session and session:
             await session.close()
@@ -143,7 +143,7 @@ async def fetch_with_retry(
             if attempt < retries - 1:
                 await asyncio.sleep(delay * (attempt + 1))
             continue
-    
+
     return None
 
 
@@ -161,24 +161,24 @@ def parse_dynasty(text: str) -> tuple[str, str]:
     """
     dynasty = ""
     year = ""
-    
+
     # Extract dynasty
     dynasty_patterns = [
         r'\[([^]]+)\]',           # [宋]
         r'(唐|宋|元|明|清|民国)',
     ]
-    
+
     for pattern in dynasty_patterns:
         match = re.search(pattern, text)
         if match:
             dynasty = match.group(1)
             break
-    
+
     # Extract Gregorian year
     year_match = re.search(r'\(?(\d{3,4})\)?', text)
     if year_match:
         year = year_match.group(1)
-    
+
     return dynasty, year
 
 
@@ -193,22 +193,22 @@ def format_creators(creators: List[dict]) -> str:
         Formatted string like "[唐] 李白 撰; 王安石 注"
     """
     parts = []
-    
+
     for c in creators:
         name = c.get('name', '')
         role = c.get('role', '')
         dynasty = c.get('dynasty', '')
-        
+
         if not name:
             continue
-        
+
         item = ""
         if dynasty:
             item += f"[{dynasty}] "
         item += name
         if role:
             item += f" {role}"
-        
+
         parts.append(item)
-    
+
     return "; ".join(parts)

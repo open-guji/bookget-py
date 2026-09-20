@@ -19,7 +19,7 @@ class Creator:
     name: str
     role: str = ""           # 注、撰、輯、釋文 等
     dynasty: str = ""        # 三國魏、晉、唐 等
-    
+
     def __str__(self) -> str:
         parts = []
         if self.dynasty:
@@ -39,26 +39,26 @@ class Resource:
     volume: str = ""         # Volume/册 identifier
     page: str = ""           # Page number
     filename: str = ""       # Suggested filename
-    
+
     # IIIF specific
     iiif_service_id: str = ""
     width: int = 0
     height: int = 0
-    
+
     # Download status
     downloaded: bool = False
     local_path: str = ""
-    
+
     def get_filename(self) -> str:
         """Generate filename if not provided."""
         if self.filename:
             return self.filename
-        
+
         parts = []
         if self.volume:
             parts.append(f"v{self.volume}")
         parts.append(f"{self.order:04d}")
-        
+
         ext = ".jpg" if self.resource_type == ResourceType.IMAGE else ".txt"
         return "_".join(parts) + ext
 
@@ -72,19 +72,19 @@ class BookMetadata:
     source_url: str = ""            # Original URL
     source_site: str = ""           # Site name (e.g., "harvard", "nlc_guji")
     index_id: str = ""              # Global index ID (Base58)
-    
+
     # Basic info
     title: str = ""
     alt_titles: List[str] = field(default_factory=list)
     creators: List[Creator] = field(default_factory=list)
-    
+
     # Publication info
     dynasty: str = ""               # 朝代
     date: str = ""                  # 出版年代 (原始格式)
     date_normalized: str = ""       # 标准化年份 (公元)
     publisher: str = ""
     place: str = ""                 # 出版地
-    
+
     # Physical description
     volumes: int = 0                # 册数
     volume_info: str = ""           # 原始描述如 "3冊"
@@ -92,32 +92,32 @@ class BookMetadata:
     binding: str = ""               # 装帧形式
     dimensions: str = ""            # 开本尺寸
     layout: str = ""                # 行款版式
-    
+
     # Classification
     category: str = ""              # 四部分类
     doc_type: str = ""              # 文献类型
     language: str = ""              # 语种
-    
+
     # Collection info
     collection_unit: str = ""       # 收藏单位
     call_number: str = ""           # 索书号
     doi: str = ""                   # DOI
-    
+
     # Additional
     notes: List[str] = field(default_factory=list)
     provenance: List[str] = field(default_factory=list)    # 批校题跋
     subjects: List[str] = field(default_factory=list)       # 主题
-    
+
     # Rights
     rights: str = ""                # 版权信息
     license: str = ""               # 许可协议
-    
+
     # IIIF specific
     iiif_manifest_url: str = ""
-    
+
     # Raw data for preservation
     raw_metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
@@ -156,7 +156,7 @@ class BookMetadata:
             "iiif_manifest_url": self.iiif_manifest_url,
             "index_id": self.index_id,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "BookMetadata":
         """Create from dictionary."""
@@ -166,7 +166,7 @@ class BookMetadata:
         return cls(creators=creators, **data)
 
 
-@dataclass 
+@dataclass
 class DownloadTask:
     """A download task for a book."""
     book_id: str
@@ -175,18 +175,18 @@ class DownloadTask:
     resources: List[Resource] = field(default_factory=list)
     output_dir: str = ""
     index_id: str = ""
-    
+
     # Progress tracking
     total_resources: int = 0
     downloaded_count: int = 0
     failed_count: int = 0
-    
+
     # Options
     include_images: bool = True
     include_text: bool = True
     include_metadata: bool = True
     max_concurrent: int = 4
-    
+
     @property
     def progress(self) -> float:
         """Download progress as percentage."""

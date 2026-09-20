@@ -2,7 +2,6 @@
 # https://ctext.org/
 
 import asyncio
-import html as html_module
 import re
 from typing import List, Optional
 import aiohttp
@@ -21,7 +20,7 @@ from ...exceptions import MetadataExtractionError
 
 class CTextHTMLParser(HTMLParser):
     """HTML parser for extracting text from CText pages (Library and Wiki)."""
-    
+
     def __init__(self):
         super().__init__()
         self.text_parts = []
@@ -30,11 +29,11 @@ class CTextHTMLParser(HTMLParser):
         self.depth = 0
         self.capture_depth = 0
         self.exclude_depth = 0
-    
+
     def handle_starttag(self, tag, attrs):
         self.depth += 1
         attrs_dict = {k: v for k, v in attrs}
-        
+
         # Check for exclusions (menu, comments, etc.)
         if attrs_dict.get("id") in self.exclude_ids or "noprint" in attrs_dict.get("class", ""):
             if self.exclude_depth == 0:
@@ -47,7 +46,7 @@ class CTextHTMLParser(HTMLParser):
         # Identify target content containers
         cls = attrs_dict.get("class", "")
         is_target = any(c in cls for c in self.target_classes)
-        
+
         # Also check for specific IDs that are always content
         if attrs_dict.get("id") == "maintext":
             is_target = True
@@ -55,16 +54,16 @@ class CTextHTMLParser(HTMLParser):
         if is_target:
             if self.capture_depth == 0:
                 self.capture_depth = self.depth
-    
+
     def handle_endtag(self, tag):
         if self.exclude_depth == self.depth:
             self.exclude_depth = 0
-        
+
         if self.capture_depth == self.depth:
             self.capture_depth = 0
-            
+
         self.depth -= 1
-    
+
     def handle_data(self, data):
         if self.capture_depth > 0 and self.exclude_depth == 0:
             text = data.strip()
@@ -72,7 +71,7 @@ class CTextHTMLParser(HTMLParser):
                 # Basic cleaning: ignore [查看正文] and similar UI elements
                 if text not in ("[", "]", "查看正文", "View reading edition"):
                     self.text_parts.append(text)
-    
+
     def get_text(self) -> str:
         return "\n\n".join(self.text_parts)
 
@@ -96,19 +95,19 @@ class CTextAdapter(BaseSiteAdapter):
     - Text by node: https://ctext.org/text.pl?node={node_id}
     - Library images: https://ctext.org/library.pl?if=zh&file={file_id}&page={n}
     """
-    
+
     site_name = "中国哲学书电子化计划 (CText)"
     site_id = "ctext"
     site_domains = ["ctext.org"]
-    
+
     supports_iiif = False
     supports_images = True   # Has scanned images for some texts
     supports_text = True     # Full text transcriptions
     supports_search = True
-    
+
     BASE_URL = "https://ctext.org"
     API_URL = "https://api.ctext.org"
-    
+
     default_headers = {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
@@ -118,16 +117,16 @@ class CTextAdapter(BaseSiteAdapter):
             "Chrome/131.0.0.0 Safari/537.36"
         ),
     }
-    
+
     def __init__(self, config=None):
         super().__init__(config)
         self._session: Optional[aiohttp.ClientSession] = None
-    
+
     async def get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(headers=self.get_headers())
         return self._session
-    
+
     def extract_book_id(self, url: str) -> str:
         """Extract text identifier from CText URL.
 
@@ -176,7 +175,7 @@ class CTextAdapter(BaseSiteAdapter):
 
         raise MetadataExtractionError(
             f"Could not extract text ID from URL: {url}")
-    
+
     def _build_page_url(self, id_type: str, id_value: str) -> str:
         """Build the HTML page URL for a given book_id."""
         if id_type == "path":
@@ -238,25 +237,25 @@ class CTextAdapter(BaseSiteAdapter):
 
         # Fallback to HTML
         return await self._parse_html_metadata(book_id)
-    
+
     def _parse_api_metadata(self, data: dict, book_id: str) -> BookMetadata:
         """Parse CText API response."""
         metadata = BookMetadata(source_id=book_id)
-        
+
         metadata.title = data.get("title", "")
         metadata.dynasty = data.get("dynasty", "")
-        
+
         author = data.get("author", "")
         if author:
             metadata.creators.append(Creator(name=author))
-        
+
         # CText uses classic Chinese text categories
         metadata.category = data.get("category", "")
         metadata.language = "lzh"  # Classical Chinese
-        
+
         metadata.raw_metadata = data
         return metadata
-    
+
     async def _parse_html_metadata(self, book_id: str) -> BookMetadata:
         """Fallback: parse metadata from HTML page."""
         metadata = BookMetadata(source_id=book_id)
@@ -383,7 +382,7 @@ class CTextAdapter(BaseSiteAdapter):
         except Exception as e:
             logger.warning(f"Failed to parse library metadata: {e}")
             return metadata
-    
+
     async def get_image_list(self, book_id: str) -> List[Resource]:
         """Get list of scanned images if available."""
         # CText has images for some texts via library.ctext.org
@@ -451,7 +450,7 @@ class CTextAdapter(BaseSiteAdapter):
         except Exception as e:
             logger.error(f"Failed to extract library images: {e}")
             return []
-    
+
     async def get_structured_text(self, book_id: str, index_id: str = "") -> Optional[StructuredText]:
         """Get structured text with chapter/paragraph hierarchy.
 
@@ -591,7 +590,7 @@ class CTextAdapter(BaseSiteAdapter):
         except Exception as e:
             logger.warning(f"Failed to get text from HTML: {e}")
             return None
-    
+
     # ------------------------------------------------------------------
     # Search (supports_search = True)
     # ------------------------------------------------------------------

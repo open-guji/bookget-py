@@ -25,8 +25,8 @@ from ..base import BaseSiteAdapter
 from ..registry import AdapterRegistry
 from ...exceptions import MetadataExtractionError
 from ...logger import logger
-from ...models.book import BookMetadata, Creator, Resource, ResourceType
-from ...models.manifest import ManifestNode, NodeStatus, ResourceKind
+from ...models.book import BookMetadata, Resource, ResourceType
+from ...models.manifest import ManifestNode, NodeStatus
 
 
 @AdapterRegistry.register

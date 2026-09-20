@@ -8,11 +8,11 @@ from typing import Optional, List, Callable
 import json
 
 from ..config import Config
-from ..models.book import BookMetadata, Resource, DownloadTask, ResourceType
+from ..models.book import BookMetadata, Resource, DownloadTask
 from ..adapters.registry import get_adapter, AdapterRegistry
 from ..adapters.base import BaseSiteAdapter
 from ..models.manifest import (
-    DownloadManifest, ManifestNode, NodeStatus, NodeType, ResourceKind,
+    DownloadManifest, ManifestNode, NodeStatus,
 )
 from ..downloaders.base import ImageDownloader, TextDownloader
 from ..storage.file_storage import FileStorage
@@ -28,13 +28,13 @@ class ResourceManager:
         manager = ResourceManager(config)
         result = await manager.download("https://guji.nlc.cn/...")
     """
-    
+
     def __init__(self, config: Config = None):
         self.config = config or Config()
         self.storage = FileStorage(self.config.storage.output_root)
         self.image_downloader = ImageDownloader(self.config.download)
         self.text_downloader = TextDownloader(self.config.download)
-    
+
     async def download(
         self,
         url: str,
@@ -63,12 +63,12 @@ class ResourceManager:
         adapter = get_adapter(url, self.config)
         if not adapter:
             raise AdapterNotFoundError(url)
-        
+
         try:
             # Extract book ID
             book_id = adapter.extract_book_id(url)
             logger.info(f"Downloading: {adapter.site_name} - {book_id}")
-            
+
             # Create download task
             task = DownloadTask(
                 book_id=book_id,
@@ -79,36 +79,36 @@ class ResourceManager:
                 include_metadata=include_metadata,
                 index_id=index_id,
             )
-            
+
             # Get metadata
             task.metadata = await adapter.get_metadata(book_id, index_id=index_id)
             task.metadata.source_url = url
             task.metadata.source_site = adapter.site_id
-            
+
             # Determine effective output directory
             dest_dir = Path(task.output_dir)
             dest_dir.mkdir(parents=True, exist_ok=True)
-            
+
             if include_metadata:
                 metadata_path = dest_dir / "metadata.json"
                 with open(metadata_path, "w", encoding="utf-8") as f:
                     json.dump(task.metadata.to_dict(), f, ensure_ascii=False, indent=2)
                 logger.info(f"Saved metadata to: {metadata_path}")
-            
+
             # Get and download images
             if include_images:
                 task.resources = await adapter.get_image_list(book_id)
                 task.total_resources = len(task.resources)
                 logger.info(f"Found {task.total_resources} images")
-                
+
                 # Create images subdir
                 img_dir = dest_dir / "images"
                 img_dir.mkdir(exist_ok=True)
-                
+
                 await self._download_images(
                     task, adapter, img_dir, progress_callback
                 )
-            
+
             # Get and save text (raw API response + optional conversions)
             if include_text and adapter.supports_text:
                 # Skip if text already downloaded (check both new and legacy names)
@@ -117,7 +117,7 @@ class ResourceManager:
                 legacy_json = text_dir / "structured.json"
                 if (raw_json.exists() and raw_json.stat().st_size > 0) or \
                    (legacy_json.exists() and legacy_json.stat().st_size > 0):
-                    logger.info(f"Text already downloaded, skipping")
+                    logger.info("Text already downloaded, skipping")
                     return task
 
                 import inspect
@@ -146,12 +146,12 @@ class ResourceManager:
                         text_path = text_dir / "content.txt"
                         text_path.write_text(text_content, encoding="utf-8")
                         logger.info(f"Saved text content to: {text_path}")
-            
+
             return task
-            
+
         finally:
             await adapter.close()
-    
+
     async def _download_images(
         self,
         task: DownloadTask,
@@ -251,7 +251,7 @@ class ResourceManager:
             f"Download complete: {task.downloaded_count}/{task.total_resources} "
             f"({task.failed_count} failed)"
         )
-    
+
     # --- Checkpoint / Resume support ---
 
     def _state_path(self, dest_dir: Path) -> Path:
@@ -288,7 +288,7 @@ class ResourceManager:
         adapter = get_adapter(url, self.config)
         if not adapter:
             raise AdapterNotFoundError(url)
-        
+
         try:
             book_id = adapter.extract_book_id(url)
             metadata = await adapter.get_metadata(book_id, index_id=index_id)
@@ -297,11 +297,11 @@ class ResourceManager:
             return metadata
         finally:
             await adapter.close()
-    
+
     def list_supported_sites(self) -> List[dict]:
         """List all supported sites."""
         return AdapterRegistry.list_adapters()
-    
+
     def is_url_supported(self, url: str) -> bool:
         """Check if a URL is supported."""
         return AdapterRegistry.get_for_url(url) is not None

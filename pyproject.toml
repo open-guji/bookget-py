@@ -60,6 +60,26 @@ where = ["."]
 include = ["bookget*"]
 exclude = ["tests*", "doc*"]
 
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# Start from pyflakes + a slice of pycodestyle that catches real mistakes
+# (undefined names, unused imports/variables, duplicate dict keys) rather
+# than the full default set, which currently reports ~700 mostly-stylistic
+# findings and so gets ignored wholesale. Widen this deliberately, not by
+# accident. See DEVELOPER.md.
+select = ["F", "E4", "E7", "E9"]
+ignore = [
+    "E741",  # ambiguous variable names (l/I/O) — present in existing code
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Quoted forward-reference annotations to types these modules don't import
+# at runtime; harmless, and importing them would be circular.
+"bookget/adapters/base.py" = ["F821"]
+"bookget/adapters/other/wikimedia_commons.py" = ["F821"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
 # Live tests hit real external sites and are deselected by default so the

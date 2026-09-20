@@ -7,7 +7,6 @@ which is then saved as structured.json and converted to other formats.
 
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
-from typing import Optional
 
 
 @dataclass

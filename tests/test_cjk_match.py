@@ -121,3 +121,35 @@ class TestOpenCCIsAvailable:
     ])
     def test_jp_variants_normalize(self, variant, standard):
         assert m.normalize_variants(variant) == m.normalize_variants(standard)
+
+
+class TestYuVariantsAllMatch:
+    """餘 / 余 / 馀 are three forms of one word and must be interchangeable.
+
+    CJK_VARIANTS used to carry a duplicate '餘' key whose second value
+    silently overwrote the first (a dict holds one value per key). The
+    duplicate is gone; these assertions pin the behavior that matters.
+    """
+
+    @pytest.mark.parametrize("a,b", [
+        ("餘杭", "余杭"),
+        ("餘杭", "馀杭"),
+        ("余杭", "馀杭"),
+    ])
+    def test_interchangeable(self, a, b):
+        assert m.title_matches(a, [b])
+
+    def test_no_duplicate_keys_in_variant_table(self):
+        # Guard the source itself: a repeated key is invisible at runtime.
+        import ast
+        import inspect
+        src = inspect.getsource(m)
+        tree = ast.parse(src)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign) and any(
+                getattr(t, "id", "") == "CJK_VARIANTS" for t in node.targets
+            ):
+                keys = [k.value for k in node.value.keys
+                        if isinstance(k, ast.Constant)]
+                dupes = {k for k in keys if keys.count(k) > 1}
+                assert not dupes, f"duplicate keys in CJK_VARIANTS: {dupes}"

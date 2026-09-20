@@ -2,10 +2,9 @@
 
 import asyncio
 import os
-import re
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-from urllib.parse import urlparse, urljoin
+from typing import List, Optional, Any
+from urllib.parse import urlparse
 import aiohttp
 
 from ..base import BaseSiteAdapter
@@ -26,11 +25,11 @@ class BaseIIIFAdapter(BaseSiteAdapter):
     IIIF Presentation API 2.0 reference:
     https://iiif.io/api/presentation/2.1/
     """
-    
+
     supports_iiif = True
     supports_images = True
     supports_text = False  # Most IIIF sites don't provide text
-    
+
     # Subclasses should override these
     manifest_url_template: str = ""  # e.g., "https://example.com/iiif/{book_id}/manifest.json"
 
@@ -59,13 +58,13 @@ class BaseIIIFAdapter(BaseSiteAdapter):
             or os.environ.get("BOOKGET_IIIF_SIZE")
             or self.DEFAULT_IIIF_SIZE
         )
-    
+
     async def get_session(self) -> aiohttp.ClientSession:
         """Get or create HTTP session."""
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession()
         return self._session
-    
+
     def get_manifest_url(self, book_id: str) -> str:
         """
         Construct IIIF manifest URL from book ID.
@@ -74,13 +73,13 @@ class BaseIIIFAdapter(BaseSiteAdapter):
         if self.manifest_url_template:
             return self.manifest_url_template.format(book_id=book_id)
         raise NotImplementedError("Subclass must implement get_manifest_url or set manifest_url_template")
-    
+
     async def get_iiif_manifest(self, book_id: str) -> Optional[dict]:
         """Fetch and parse IIIF manifest."""
         url = self.get_manifest_url(book_id)
         session = await self.get_session()
         headers = self.get_headers(url)
-        
+
         try:
             async with session.get(url, headers=headers) as response:
                 response.raise_for_status()
@@ -90,12 +89,12 @@ class BaseIIIFAdapter(BaseSiteAdapter):
         except Exception as e:
             logger.error(f"Failed to fetch manifest: {e}")
             raise MetadataExtractionError(f"Failed to fetch IIIF manifest: {e}")
-    
+
     async def get_metadata(self, book_id: str, index_id: str = "") -> BookMetadata:
         """Extract metadata from IIIF manifest."""
         manifest = await self.get_iiif_manifest(book_id)
         return self._parse_manifest_metadata(manifest, book_id)
-    
+
     def _parse_manifest_metadata(self, manifest: dict, book_id: str) -> BookMetadata:
         """
         Parse metadata from IIIF manifest.
@@ -105,17 +104,17 @@ class BaseIIIFAdapter(BaseSiteAdapter):
             source_id=book_id,
             iiif_manifest_url=self.get_manifest_url(book_id),
         )
-        
+
         # Parse label (title)
         metadata.title = self._extract_label(manifest.get("label", ""))
-        
+
         # Parse metadata array
         for item in manifest.get("metadata", []):
             label = self._extract_label(item.get("label", ""))
             value = self._extract_label(item.get("value", ""))
-            
+
             label_lower = label.lower()
-            
+
             if "title" in label_lower:
                 if not metadata.title:
                     metadata.title = value
@@ -131,12 +130,12 @@ class BaseIIIFAdapter(BaseSiteAdapter):
                 metadata.rights = value
             elif "description" in label_lower:
                 metadata.notes.append(value)
-        
+
         # Store raw metadata
         metadata.raw_metadata = manifest
-        
+
         return metadata
-    
+
     def _extract_label(self, value: Any) -> str:
         """
         Extract string from IIIF label/value which can be:
@@ -175,12 +174,12 @@ class BaseIIIFAdapter(BaseSiteAdapter):
                 return first[0] if first else ""
             return str(first) if first else ""
         return str(value) if value else ""
-    
+
     async def get_image_list(self, book_id: str) -> List[Resource]:
         """Extract image resources from IIIF manifest."""
         manifest = await self.get_iiif_manifest(book_id)
         return self._parse_manifest_images(manifest)
-    
+
     def _parse_manifest_images(self, manifest: dict) -> List[Resource]:
         """
         Parse image resources from IIIF manifest.
@@ -197,40 +196,40 @@ class BaseIIIFAdapter(BaseSiteAdapter):
                 return self._parse_manifest_images_v3(manifest)
             logger.warning("No sequences found in manifest")
             return resources
-        
+
         canvases = sequences[0].get("canvases", [])
-        
+
         for idx, canvas in enumerate(canvases):
             # Get canvas label for page info
             page_label = self._extract_label(canvas.get("label", ""))
-            
+
             # Get image from canvas
             images = canvas.get("images", [])
             if not images:
                 continue
-            
+
             image_annotation = images[0]
             resource_data = image_annotation.get("resource", {})
-            
+
             # Get image URL
             image_url = resource_data.get("@id", "")
-            
+
             # Get IIIF Image API service ID for full quality
             service = resource_data.get("service", {})
             if isinstance(service, list):
                 service = service[0] if service else {}
-            
+
             service_id = service.get("@id", "")
-            
+
             # Get dimensions
             width = resource_data.get("width", canvas.get("width", 0))
             height = resource_data.get("height", canvas.get("height", 0))
-            
+
             # Construct image URL at the configured size if we have a service ID
             if service_id:
                 # IIIF Image API: {service_id}/full/{size}/0/default.jpg
                 image_url = f"{service_id}/full/{self.iiif_size}/0/default.jpg"
-            
+
             resource = Resource(
                 url=image_url,
                 resource_type=ResourceType.IMAGE,
@@ -403,18 +402,18 @@ class GenericIIIFAdapter(BaseIIIFAdapter):
     
     Handles URLs that directly point to IIIF manifests.
     """
-    
+
     site_name = "Generic IIIF"
     site_id = "generic_iiif"
     site_domains = []  # Will be matched via can_handle
-    
+
     _manifest_url: str = ""
-    
+
     @classmethod
     def can_handle(cls, url: str) -> bool:
         """Check if URL is a IIIF manifest."""
         return "manifest" in url.lower() and url.endswith(".json")
-    
+
     def extract_book_id(self, url: str) -> str:
         """For generic IIIF, the URL itself is the identifier."""
         self._manifest_url = url
@@ -426,7 +425,7 @@ class GenericIIIFAdapter(BaseIIIFAdapter):
             if "manifest" in part.lower() and i > 0:
                 return path_parts[i - 1]
         return path_parts[-2] if len(path_parts) > 1 else "unknown"
-    
+
     def get_manifest_url(self, book_id: str) -> str:
         """Return the stored manifest URL."""
         return self._manifest_url

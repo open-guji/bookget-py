@@ -7,7 +7,7 @@
 import asyncio
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Dict, Callable
 from urllib.parse import urlparse
@@ -16,7 +16,7 @@ import aiohttp
 
 from ..base import BaseSiteAdapter
 from ..registry import AdapterRegistry
-from ...models.book import BookMetadata, Resource, Creator
+from ...models.book import BookMetadata, Resource
 from ...models.manifest import (
     DownloadManifest, ManifestNode, NodeStatus, NodeType, ResourceKind,
 )

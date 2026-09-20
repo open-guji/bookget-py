@@ -1,7 +1,6 @@
 """SSE (Server-Sent Events) event bus and response helper."""
 import asyncio
 import json
-from typing import Callable
 
 
 class EventBus:

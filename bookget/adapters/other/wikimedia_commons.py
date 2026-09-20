@@ -2,8 +2,8 @@
 # https://commons.wikimedia.org/
 
 import re
-from typing import List, Optional
-from urllib.parse import unquote, quote
+from typing import List
+from urllib.parse import unquote
 import aiohttp
 import asyncio
 
@@ -11,7 +11,6 @@ from ..base import BaseSiteAdapter
 from ..registry import AdapterRegistry
 from ...models.book import BookMetadata, Resource, ResourceType, Creator
 from ...models.search import SearchResult, SearchResponse, MatchedResource
-from ...text_parsers.base import StructuredText
 from ...shared import cjk_match
 from ...logger import logger
 from ...exceptions import MetadataExtractionError, DownloadError
@@ -668,7 +667,7 @@ class WikimediaCommonsAdapter(BaseSiteAdapter):
                     display_name = file_title.removeprefix("File:").rsplit(".", 1)[0].replace('_', ' ')
                     add_result(
                         self._wiki_url(file_title),
-                        f"维基共享资源",
+                        "维基共享资源",
                         details=display_name,
                     )
         else:
@@ -677,7 +676,7 @@ class WikimediaCommonsAdapter(BaseSiteAdapter):
                 display_name = file_title.removeprefix("File:").rsplit(".", 1)[0].replace('_', ' ')
                 add_result(
                     self._wiki_url(file_title),
-                    f"维基共享资源",
+                    "维基共享资源",
                     details=display_name,
                 )
 

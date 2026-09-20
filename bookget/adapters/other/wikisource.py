@@ -11,7 +11,7 @@ import asyncio
 
 from ..base import BaseSiteAdapter
 from ..registry import AdapterRegistry
-from ...models.book import BookMetadata, Resource, ResourceType, Creator
+from ...models.book import BookMetadata, Resource, Creator
 from ...models.manifest import (
     DownloadManifest, ManifestNode, NodeStatus, NodeType, ResourceKind,
 )
@@ -20,7 +20,7 @@ from ...text_parsers.base import StructuredText
 from ...text_parsers.wikisource_parser import WikisourceParser
 from ...models.search import MatchedResource
 from ...logger import logger
-from ...exceptions import MetadataExtractionError, DownloadError
+from ...exceptions import MetadataExtractionError
 
 # 维基文库常见特殊卷名 → 拼音文件名前缀映射
 # 格式: 正则模式 → (前缀, 是否保留尾部数字)
@@ -391,7 +391,6 @@ class WikisourceAdapter(BaseSiteAdapter):
         If the page has subpages (it's a book), fetch all subpages.
         If it's a single chapter page, fetch just that.
         """
-        session = await self.get_session()
         parser = WikisourceParser()
 
         # Check if this is a book (has subpages) or a chapter

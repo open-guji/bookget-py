@@ -1,12 +1,12 @@
 # Base Downloader - Abstract base class for resource downloaders
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 from pathlib import Path
 import aiohttp
 import asyncio
 
-from ..models.book import Resource, ResourceType
+from ..models.book import Resource
 from ..config import DownloadConfig
 from ..logger import logger
 from ..exceptions import DownloadError, ResourceNotFoundError, RateLimitError
@@ -38,12 +38,12 @@ class BaseDownloader(ABC):
     Handles the actual downloading of resources (images, text, PDFs)
     with retry logic, rate limiting, and error handling.
     """
-    
+
     def __init__(self, config: DownloadConfig = None):
         self.config = config or DownloadConfig()
         self._session: Optional[aiohttp.ClientSession] = None
         self._semaphore: Optional[asyncio.Semaphore] = None
-    
+
     async def get_session(self) -> aiohttp.ClientSession:
         """Get or create the aiohttp session."""
         if self._session is None or self._session.closed:
@@ -53,13 +53,13 @@ class BaseDownloader(ABC):
                 headers={"User-Agent": self.config.user_agent}
             )
         return self._session
-    
+
     async def get_semaphore(self) -> asyncio.Semaphore:
         """Get or create the concurrency semaphore."""
         if self._semaphore is None:
             self._semaphore = asyncio.Semaphore(self.config.concurrent_downloads)
         return self._semaphore
-    
+
     @abstractmethod
     async def download(
         self,
@@ -79,7 +79,7 @@ class BaseDownloader(ABC):
             True if download succeeded, False otherwise
         """
         pass
-    
+
     async def download_with_retry(
         self,
         resource: Resource,
@@ -98,7 +98,7 @@ class BaseDownloader(ABC):
             True if download succeeded, False otherwise
         """
         semaphore = await self.get_semaphore()
-        
+
         async with semaphore:
             for attempt in range(self.config.retry_attempts):
                 try:
@@ -118,9 +118,9 @@ class BaseDownloader(ABC):
                     logger.warning(f"Download attempt {attempt + 1} failed: {e}")
                     if attempt < self.config.retry_attempts - 1:
                         await asyncio.sleep(self.config.retry_delay * (attempt + 1))
-            
+
             return False
-    
+
     async def close(self):
         """Close the HTTP session."""
         if self._session and not self._session.closed:
@@ -130,7 +130,7 @@ class BaseDownloader(ABC):
 
 class ImageDownloader(BaseDownloader):
     """Downloader for image resources."""
-    
+
     async def download(
         self,
         resource: Resource,
@@ -140,7 +140,7 @@ class ImageDownloader(BaseDownloader):
         """Download an image resource."""
         session = await self.get_session()
         request_headers = headers or {}
-        
+
         try:
             async with session.get(request_url(resource.url), headers=request_headers) as response:
                 if response.status == 404:
@@ -148,12 +148,12 @@ class ImageDownloader(BaseDownloader):
                 if response.status == 429:
                     retry_after = response.headers.get("Retry-After")
                     raise RateLimitError(resource.url, int(retry_after) if retry_after else None)
-                
+
                 response.raise_for_status()
-                
+
                 # Ensure output directory exists
                 output_path.parent.mkdir(parents=True, exist_ok=True)
-                
+
                 # Check for NLC security header and remove if present
                 content = await response.read()
                 content = self._remove_security_header(content)
@@ -167,10 +167,10 @@ class ImageDownloader(BaseDownloader):
 
                 logger.debug(f"Downloaded: {output_path.name}")
                 return True
-                
+
         except aiohttp.ClientError as e:
             raise DownloadError(f"Failed to download {resource.url}: {e}")
-    
+
     def _remove_security_header(self, content: bytes) -> bytes:
         """Remove NLC security header if present."""
         # NLC uses "###SECURED_IMAGE###" prefix
@@ -205,7 +205,7 @@ class ImageDownloader(BaseDownloader):
 
 class TextDownloader(BaseDownloader):
     """Downloader for text resources."""
-    
+
     async def download(
         self,
         resource: Resource,
@@ -215,27 +215,27 @@ class TextDownloader(BaseDownloader):
         """Download a text resource."""
         session = await self.get_session()
         request_headers = headers or {}
-        
+
         try:
             async with session.get(request_url(resource.url), headers=request_headers) as response:
                 if response.status == 404:
                     raise ResourceNotFoundError(resource.url)
                 if response.status == 429:
                     raise RateLimitError(resource.url)
-                
+
                 response.raise_for_status()
-                
+
                 # Ensure output directory exists
                 output_path.parent.mkdir(parents=True, exist_ok=True)
-                
+
                 # Read as text with UTF-8 encoding
                 text = await response.text(encoding='utf-8')
-                
+
                 # Write to file
                 output_path.write_text(text, encoding='utf-8')
-                
+
                 logger.debug(f"Downloaded text: {output_path.name}")
                 return True
-                
+
         except aiohttp.ClientError as e:
             raise DownloadError(f"Failed to download {resource.url}: {e}")

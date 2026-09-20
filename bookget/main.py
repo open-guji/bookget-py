@@ -224,15 +224,15 @@ async def _download_one(args, config: Config, url: str,
             index_id=args.index_id if hasattr(args, 'index_id') else "",
             progress_callback=callback
         )
-        
+
         if not args.json_progress and not args.quiet:
             print()  # Newline after progress bar
-        
+
         if task.metadata:
             logger.info(f"Title: {task.metadata.title}")
         logger.info(f"Downloaded: {task.downloaded_count}/{task.total_resources}")
         logger.info(f"Output: {task.output_dir}")
-        
+
         if args.json:
             result = {
                 "book_id": task.book_id,
@@ -243,7 +243,7 @@ async def _download_one(args, config: Config, url: str,
                 "output_dir": task.output_dir
             }
             print(json.dumps(result, ensure_ascii=False, indent=2))
-            
+
     finally:
         await manager.close()
 
@@ -251,13 +251,13 @@ async def _download_one(args, config: Config, url: str,
 async def cmd_metadata(args, config: Config):
     """Handle metadata command."""
     manager = ResourceManager(config)
-    
+
     try:
         metadata = await manager.get_metadata(
-            args.url, 
+            args.url,
             index_id=args.index_id if hasattr(args, 'index_id') else ""
         )
-        
+
         if args.format == "json":
             print(json.dumps(metadata.to_dict(), ensure_ascii=False, indent=2))
         else:
@@ -269,7 +269,7 @@ async def cmd_metadata(args, config: Config):
             print(f"Category: {metadata.category}")
             if metadata.iiif_manifest_url:
                 print(f"IIIF: {metadata.iiif_manifest_url}")
-                
+
     finally:
         await manager.close()
 
@@ -707,9 +707,9 @@ def main():
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     parser.add_argument("--config", type=str, help="Config file path")
-    
+
     subparsers = parser.add_subparsers(dest="command", help="Commands")
-    
+
     # download command
     p_download = subparsers.add_parser(
         "download",
@@ -765,7 +765,7 @@ def main():
     p_meta.add_argument("url", help="Book URL")
     p_meta.add_argument("--index-id", type=str, help="Global index ID", default="")
     p_meta.add_argument("--format", choices=["text", "json"], default="text")
-    
+
     # search command
     p_search = subparsers.add_parser("search", help="Search for books on a site")
     p_search.add_argument("site", help="Site ID (e.g., wikisource)")

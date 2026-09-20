@@ -105,7 +105,6 @@ async def handle_start_download(request: web.Request):
     body = await _body(request)
     url = body.get("url", "")
     output_dir = body.get("outputDir") or body.get("output_dir", "")
-    task_id_hint = body.get("taskId") or body.get("task_id")
     node_ids = body.get("nodeIds") or body.get("node_ids")
     concurrency = int(body.get("concurrency", 1))
     if not url:

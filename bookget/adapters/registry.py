@@ -3,8 +3,6 @@
 from typing import Dict, List, Optional, Type
 import importlib
 import pkgutil
-import sys
-from pathlib import Path
 
 from .base import BaseSiteAdapter
 from ..logger import logger
@@ -16,10 +14,10 @@ class AdapterRegistry:
     
     Provides auto-discovery and lookup of adapters by URL or site ID.
     """
-    
+
     _adapters: Dict[str, Type[BaseSiteAdapter]] = {}
     _initialized: bool = False
-    
+
     @classmethod
     def register(cls, adapter_class: Type[BaseSiteAdapter]) -> Type[BaseSiteAdapter]:
         """
@@ -34,13 +32,13 @@ class AdapterRegistry:
         cls._adapters[site_id] = adapter_class
         logger.debug(f"Registered adapter: {site_id} ({adapter_class.site_name})")
         return adapter_class
-    
+
     @classmethod
     def get_by_id(cls, site_id: str) -> Optional[Type[BaseSiteAdapter]]:
         """Get adapter class by site ID."""
         cls._ensure_initialized()
         return cls._adapters.get(site_id)
-    
+
     @classmethod
     def get_for_url(cls, url: str) -> Optional[Type[BaseSiteAdapter]]:
         """
@@ -69,12 +67,12 @@ class AdapterRegistry:
                 fallback = adapter_class
 
         return fallback
-    
+
     @classmethod
     def list_adapters(cls) -> List[Dict[str, str]]:
         """List all registered adapters."""
         cls._ensure_initialized()
-        
+
         return [
             {
                 "id": site_id,
@@ -85,14 +83,14 @@ class AdapterRegistry:
             }
             for site_id, adapter in cls._adapters.items()
         ]
-    
+
     @classmethod
     def _ensure_initialized(cls):
         """Ensure adapters have been discovered."""
         if not cls._initialized:
             cls._discover_adapters()
             cls._initialized = True
-    
+
     # Adapter sub-packages to scan. Add a new entry only when introducing
     # a whole new category of adapters; individual modules are auto-discovered.
     _ADAPTER_PACKAGES = ["bookget.adapters.iiif", "bookget.adapters.other"]

@@ -1,10 +1,8 @@
 # Kyoto University Rare Materials Digital Archive Adapter
 # https://rmda.kulib.kyoto-u.ac.jp/
 
-import os
 import re
 from typing import List, Any
-from urllib.parse import urlparse
 
 from .base_iiif import BaseIIIFAdapter
 from ..registry import AdapterRegistry

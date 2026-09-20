@@ -97,11 +97,11 @@ def cmd_upload(args) -> None:
         files.append(str(p))
 
     total = sum(Path(f).stat().st_size for f in files)
-    print(f'\n准备上传：')
+    print('\n准备上传：')
     print(f'  identifier: {args.identifier}')
     print(f'  url:        https://archive.org/details/{args.identifier}')
     print(f'  files:      {len(files)} ({total / 1024 / 1024:.1f} MB)')
-    print(f'  metadata:')
+    print('  metadata:')
     for k, v in md.items():
         print(f'    {k}: {v}')
 

@@ -8,7 +8,6 @@
 #   3. PDF：https://taiwanebook.ncl.edu.tw{pdfPath}（單冊一般為 /ebkFiles/{id}/{id}.PDF）
 # PDF 檔本身可直接 GET（200 application/pdf），頁面上的 reCAPTCHA 不擋檔案下載。
 
-import asyncio
 import re
 import ssl
 from pathlib import Path

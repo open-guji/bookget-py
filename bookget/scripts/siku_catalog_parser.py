@@ -11,7 +11,7 @@ def emit_progress(event_type: str, **kwargs):
 
 # Common dynasties in Siku Catalog
 DYNASTIES = [
-    "周", "秦", "漢", "魏", "蜀", "吳", "晉", "宋", "齊", "梁", "陳", "隋", "唐", "元", "明", "清", "國朝", 
+    "周", "秦", "漢", "魏", "蜀", "吳", "晉", "宋", "齊", "梁", "陳", "隋", "唐", "元", "明", "清", "國朝",
     "後周", "北齊", "北周", "南唐", "後唐", "後晉", "後漢", "遼", "金", "西夏"
 ]
 
@@ -58,26 +58,26 @@ def parse_siku_catalog(json_path: str):
                 current_category = p
                 i += 1
                 continue
-                
+
             # Book record: ***《Title》Volumes
             if p.startswith("***《"):
                 title_line = p.lstrip("*")
                 matches = re.findall(r"《(.*?)》(.*?)($|，| |、)", title_line)
-                
+
                 titles_vols = []
                 for m in matches:
                     titles_vols.append({"title": m[0], "volumes": m[1].strip()})
-                
+
                 i += 1
                 content_paragraphs = []
                 notes = []
-                
+
                 # Next paragraphs might be summary or notes
                 while i < len(paragraphs):
                     next_p = paragraphs[i].strip()
                     if next_p.startswith("*") or _is_standalone_heading(next_p):
                         break # Next section/category/book/heading
-                    
+
                     if next_p.startswith("謹案："):
                         notes.append(next_p)
                     elif next_p.startswith("{{{"):
@@ -86,7 +86,7 @@ def parse_siku_catalog(json_path: str):
                     else:
                         content_paragraphs.append(next_p)
                     i += 1
-                
+
                 # If no content paragraphs but we have notes, the first note might contain author
                 if not content_paragraphs and notes:
                     # Heuristic: if a note starts with {{{謹案：...}}} but contains author info after it
@@ -97,16 +97,16 @@ def parse_siku_catalog(json_path: str):
                         if len(parts) > 1 and parts[1].strip():
                             content_paragraphs.append(parts[1].strip())
                             notes[0] = parts[0] + "}}}"
-                
+
                 summary = "\n".join(content_paragraphs)
                 full_notes = "\n".join(notes)
-                
+
                 for tv in titles_vols:
                     author = extract_author(summary)
                     if not author and full_notes:
                          # Try extracting from notes if summary is empty
                          author = extract_author(full_notes)
-                    
+
                     books.append({
                         "title": tv["title"],
                         "volumes": tv["volumes"],
@@ -117,28 +117,28 @@ def parse_siku_catalog(json_path: str):
                         "category": current_category
                     })
                 continue
-            
+
             i += 1
-            
+
     return books
 
 def extract_author(text: str) -> str:
     """Extract author using improved heuristics."""
     if not text:
         return ""
-    
+
     # Try to clean up the start
     text = re.sub(r"^.*?}}}", "", text).strip()
-    
+
     # First sentence usually contains author
     # Handle both full-width and half-width punctuation
     first_sentence = re.split(r"[。！？]", text)[0]
-    
+
     # Look for roles
     roles = ["撰", "編", "註", "注", "輯", "著", "述", "正", "校", "刪", "次", "訂", "集"]
-    
+
     # Sort roles by length descending to catch multi-character roles if any (though usually single)
-    
+
     # Try to find a role-based signature
     # Pattern: [Dynasty] [Name] [Role]
     for role in roles:
@@ -149,12 +149,12 @@ def extract_author(text: str) -> str:
             for d in DYNASTIES:
                 if author_candidate.startswith(d):
                     return author_candidate
-            
+
             # If no dynasty found but role matches, still might be it
             # But avoid too short strings or common words
             if len(author_candidate) > 2:
                 return author_candidate
-                
+
     # Fallback: check for "題...撰"
     題撰 = re.search(r"題(.*?)撰", first_sentence)
     if 題撰:

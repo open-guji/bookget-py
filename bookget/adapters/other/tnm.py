@@ -11,7 +11,6 @@
 #   3. 每页瓦片基址 /dlib/img/{id}/tiles/{imageid}，含 ImageProperties.xml + TileGroup*/
 #      → download_zoomify_image 拉全部顶层瓦片拼成整页
 
-import asyncio
 import re
 from pathlib import Path
 from typing import Callable, List, Optional

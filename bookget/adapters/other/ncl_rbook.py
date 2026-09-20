@@ -16,17 +16,14 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
-import json
-import re
 from pathlib import Path
 from typing import Callable, List, Optional
-from urllib.parse import urlparse, parse_qs
 
 from ..base import BaseSiteAdapter
 from ..registry import AdapterRegistry
 from ...exceptions import DownloadError, MetadataExtractionError
 from ...logger import logger
-from ...models.book import BookMetadata, Creator, Resource, ResourceType
+from ...models.book import BookMetadata, Resource, ResourceType
 from ...models.manifest import ManifestNode, NodeStatus
 
 try:
@@ -680,7 +677,6 @@ class NCLRbookAdapter(BaseSiteAdapter):
         """
         new_indexes = []
         bookno = prep["md"]["bookno"]
-        total = len(prep["bases"])
 
         # 拿到待 flush 的 idx 列表
         idxs = await page.evaluate(

@@ -1,7 +1,7 @@
 # Wikisource (维基文库) text parser
 
 import re
-from typing import List, Optional
+from typing import List
 from .base import StructuredText, BaseTextParser
 
 

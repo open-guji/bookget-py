@@ -116,9 +116,6 @@ class ArchiveOrgAdapter(BaseSiteAdapter):
 
         # Parse page count from files list
         files = data.get("files", [])
-        tif_count = sum(1 for f in files
-                        if f.get("source") == "derivative"
-                        and f.get("name", "").endswith("_tif.zip"))
 
         # Count actual TIF pages from scandata or file listing
         for f in files:

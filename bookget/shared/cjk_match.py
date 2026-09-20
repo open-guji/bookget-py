@@ -82,7 +82,10 @@ CJK_VARIANTS: dict[str, str] = {
     '誌': '志', '志': '誌',
     '範': '范', '范': '範',
     '錄': '录', '录': '錄',
-    '餘': '馀',  # 餘→余 already above; add 餘→馀
+    # NOTE: '餘' is deliberately NOT repeated here. It already maps to '余'
+    # above, and a dict holds one value per key — a second '餘': '馀' entry
+    # silently overwrote the first rather than adding to it. 餘/余/馀 still
+    # all match each other via OpenCC normalization (covered by tests).
     '閣': '阁', '阁': '閣',
     '閱': '阅', '阅': '閱',
     '問': '问', '问': '問',

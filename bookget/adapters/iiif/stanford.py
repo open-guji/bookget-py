@@ -2,16 +2,12 @@
 # https://searchworks.stanford.edu/
 
 import re
-from typing import List, Optional
-import aiohttp
 
 from .base_iiif import BaseIIIFAdapter
 from ..registry import AdapterRegistry
-from ...models.book import BookMetadata
-from ...logger import logger
 
 
-@AdapterRegistry.register 
+@AdapterRegistry.register
 class StanfordAdapter(BaseIIIFAdapter):
     """
     Adapter for Stanford University Libraries.
@@ -24,7 +20,7 @@ class StanfordAdapter(BaseIIIFAdapter):
     - PURL: https://purl.stanford.edu/{druid}
     - IIIF Manifest: https://purl.stanford.edu/{druid}/iiif/manifest
     """
-    
+
     site_name = "斯坦福大学图书馆 (Stanford)"
     site_id = "stanford"
     site_domains = [
@@ -32,10 +28,10 @@ class StanfordAdapter(BaseIIIFAdapter):
         "purl.stanford.edu",
         "stacks.stanford.edu"
     ]
-    
+
     supports_iiif = True
     supports_text = False
-    
+
     def extract_book_id(self, url: str) -> str:
         """Extract DRUID from Stanford URL."""
         # DRUID pattern: two letters followed by numbers and letters
@@ -43,14 +39,14 @@ class StanfordAdapter(BaseIIIFAdapter):
         match = re.search(r'([a-z]{2}\d{3}[a-z]{2}\d{4})', url.lower())
         if match:
             return match.group(1)
-        
+
         # Try /view/ pattern
         match = re.search(r'/view/([^/]+)', url)
         if match:
             return match.group(1)
-        
+
         raise ValueError(f"Could not extract DRUID from URL: {url}")
-    
+
     def get_manifest_url(self, book_id: str) -> str:
         """Construct IIIF manifest URL."""
         return f"https://purl.stanford.edu/{book_id}/iiif/manifest"
@@ -68,22 +64,22 @@ class BerkeleyAdapter(BaseIIIFAdapter):
     - Digital Collections: https://digicoll.lib.berkeley.edu/record/{id}
     - IIIF Manifest: varies by collection
     """
-    
+
     site_name = "柏克莱加州大学东亚图书馆 (Berkeley)"
     site_id = "berkeley"
     site_domains = ["digicoll.lib.berkeley.edu"]
-    
+
     supports_iiif = True
     supports_text = False
-    
+
     def extract_book_id(self, url: str) -> str:
         """Extract record ID from Berkeley URL."""
         match = re.search(r'/record/(\d+)', url)
         if match:
             return match.group(1)
-        
+
         raise ValueError(f"Could not extract record ID from URL: {url}")
-    
+
     def get_manifest_url(self, book_id: str) -> str:
         """Construct IIIF manifest URL."""
         # Berkeley uses different manifest URL patterns

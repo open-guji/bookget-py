@@ -3,7 +3,7 @@
 
 import asyncio
 import re
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 from urllib.parse import quote
 import aiohttp
 
@@ -230,7 +230,12 @@ class NLCGujiAdapter(BaseSiteAdapter):
                 )
 
                 if download_url:
-                    vol_title = volume_titles.get(structure_id, "")
+                    # NOTE: volume_titles[structure_id] holds the human-readable
+                    # 册名 (e.g. 「第一冊」), but Resource has no title field, so
+                    # only the opaque structureId travels through as `volume`.
+                    # discover_structure() below does surface the 册名. Carrying
+                    # it here would need a new Resource field — left as-is
+                    # rather than computing and silently discarding it.
                     resource = Resource(
                         url=download_url,
                         resource_type=ResourceType.IMAGE,
