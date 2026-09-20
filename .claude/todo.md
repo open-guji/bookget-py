@@ -45,10 +45,14 @@
 俄罗斯国立图书馆 `viewer.rsl.ru`、`idp.orientalstudies.ru`
 
 ### A4. 欧美/其他（11）
-**IDP 国际敦煌项目**是个大头：上游路由 7 个镜像域
-（`idp.bl.uk` / `idp.bnf.fr` / `idp.bbaw.de` / `idp.nlc.cn` /
-`idp.korea.ac.kr` / `idp.afc.ryukoku.ac.jp` / `idp.orientalstudies.ru`），
-做一个适配器即可全覆盖，**性价比最高**。
+~~**IDP 国际敦煌项目**是个大头~~ → **已完成（2026-09-20）**：一个适配器吃下
+7 个镜像域，适配器 37 → **38**，覆盖域名 → 60。柏林镜像 live 验证通过。
+实测要点见 `bookget/adapters/other/idp.py` 的 NOTE 1——`uid` 是检索会话
+token 不是条目 id，只带 uid 会**静默返回另一件藏品**；上游 Go 版把 uid 当
+书籍 ID，照抄会下错东西。
+镜像可达性（沙箱实测）：柏林/国图 HTTP 200 可用；`idp.bl.uk` Cloudflare 403；
+`idp.orientalstudies.ru` 503；`idp.korea.ac.kr` DNS 不解析；
+其余仅 HTTP、无 HTTPS。
 其余：HathiTrust `babel.hathitrust.org`、FamilySearch（需登录）、
 史密森 `asia.si.edu` / `www.si.edu`（我们只做了 `ids.si.edu`）、
 普林斯顿 catalog 域、喃遗产 `lib.nomfoundation.org`
@@ -126,8 +130,9 @@ UI 只暴露了 discover / download / expand / cancel / delete，
 
 ## E. 建议的 v0.5.0 范围（按性价比排序）
 
-1. **先修不工作的**：Berkeley 模板、archive_org 0 图、补齐 17 个 live 验证
-2. **IDP 一个适配器吃掉 7 个域名**（敦煌文献，学术价值高）
+1. ~~**先修不工作的**~~：进行中——archive_org 已修、Berkeley 查实为整站 WAF、
+   princeton 已修、live 从 20 补到 26 条（见 B 节）
+2. ~~**IDP 一个适配器吃掉 7 个域名**~~ **已完成 2026-09-20**
 3. **中国大陆一批**：天一阁、深圳、山东、甘肃、温州、南大、央美
    （本机可直接验证；广州大典需登录态，单列）
 4. **NLC 其余子站**：mylib / ouroots / idp（同一机构，可复用会话逻辑）

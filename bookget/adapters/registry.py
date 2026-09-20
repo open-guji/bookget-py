@@ -1,6 +1,7 @@
 # Adapter Registry - Auto-discovery and registration of site adapters
 
 from typing import Dict, List, Optional, Type
+from urllib.parse import urlparse
 import importlib
 import pkgutil
 
@@ -57,16 +58,35 @@ class AdapterRegistry:
         # URL via can_handle; without this priority it would steal manifest
         # URLs that actually belong to a specific site (e.g. a Bodleian or
         # Vatican IIIF manifest), bypassing that site's metadata parsing.
+        # Among domain-specific adapters, prefer the most specific domain.
+        # can_handle() matches by substring, so "bl.uk" also matches
+        # "idp.bl.uk" — returning the first hit would hand IDP's London
+        # mirror to the British Library adapter, decided by nothing but
+        # registration order.
+        try:
+            netloc = urlparse(url).netloc.lower()
+        except Exception:
+            netloc = ""
+
         fallback = None
+        best = None
+        best_match = -1
         for adapter_class in cls._adapters.values():
             if not adapter_class.can_handle(url):
                 continue
-            if adapter_class.site_domains:
-                return adapter_class
-            if fallback is None:
-                fallback = adapter_class
+            if not adapter_class.site_domains:
+                if fallback is None:
+                    fallback = adapter_class
+                continue
+            specificity = max(
+                (len(domain) for domain in adapter_class.site_domains
+                 if domain.lower() in netloc),
+                default=0,
+            )
+            if specificity > best_match:
+                best, best_match = adapter_class, specificity
 
-        return fallback
+        return best or fallback
 
     @classmethod
     def list_adapters(cls) -> List[Dict[str, str]]:

@@ -136,6 +136,14 @@ items:
     title_contains: "西北文献"
 
   # --- Non-IIIF image sites ---
+  - site_id: idp
+    url: "http://idp.bbaw.de/database/oo_scroll_h.a4d?uid=5475972796;bst=1;recnum=69129;index=1;img=1"
+    kind: images
+    min_images: 2
+    title_contains: "Ch 1"
+    # 柏林镜像；idp.bl.uk 被 Cloudflare 403、其余镜像沙箱连不上，
+    # 但七个镜像跑同一套软件，验通一个即验通取图路径
+
   - site_id: wikimedia_commons
     url: "https://commons.wikimedia.org/wiki/File:CADAL06210208_%E5%9B%9B%E5%BA%AB%E6%9B%B8%E7%9B%AE%EF%BC%9A%E5%9B%9B.djvu"
     kind: images
