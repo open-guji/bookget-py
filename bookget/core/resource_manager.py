@@ -636,6 +636,16 @@ class ResourceManager:
 
             total = len(nodes)
             completed = 0
+            # Progress is reported in IMAGES rather than nodes: a book with 12
+            # volumes would otherwise report "0/12" and not move until a whole
+            # volume finished, which reads as a frozen download.
+            target_nodes = list(nodes)
+            total_images = sum(
+                (getattr(n, 'total_items', 0) or 0) for n in target_nodes
+            )
+            for _n in target_nodes:
+                if getattr(_n, 'downloaded_items', None) is None:
+                    _n.downloaded_items = 0
             lock = asyncio.Lock()
             semaphore = asyncio.Semaphore(max(1, concurrency))
             logger.info(f"Downloading {total} nodes (concurrency={max(1, concurrency)})…")
@@ -679,10 +689,30 @@ class ResourceManager:
                     # from blocking forever.
                     item_count = max(1, getattr(node, 'total_items', 0) or 1)
                     node_timeout = min(3600, max(180, 60 + item_count * 8))
+
+                    def node_progress(done: int, node_total: int, _node=node):
+                        """Report progress in IMAGES, not whole nodes.
+
+                        This used to pass progress_callback=None, so callers
+                        only heard about a volume once it had fully finished.
+                        A 12-volume book therefore sat at "0/12, 0%" for
+                        minutes on end and looked completely frozen in the UI.
+                        Counting images across all nodes makes the bar move.
+                        """
+                        if not progress_callback:
+                            return
+                        _node.downloaded_items = done
+                        done_images = sum(
+                            (getattr(n, 'downloaded_items', 0) or 0)
+                            for n in target_nodes
+                        )
+                        progress_callback(done_images, total_images)
+
                     try:
                         await asyncio.wait_for(
                             adapter.download_node(
-                                book_id, node, node_dir, progress_callback=None),
+                                book_id, node, node_dir,
+                                progress_callback=node_progress),
                             timeout=node_timeout,
                         )
                         success = node.status == NodeStatus.COMPLETED
@@ -709,7 +739,17 @@ class ResourceManager:
                         if pbar:
                             pbar.update(1)
                         if progress_callback:
-                            progress_callback(completed, total)
+                            # Keep the unit consistent with node_progress
+                            # (images), and settle a finished node at its full
+                            # count even if the adapter reported no progress.
+                            if success:
+                                node.downloaded_items = (
+                                    getattr(node, 'total_items', 0) or 0)
+                            done_images = sum(
+                                (getattr(n, 'downloaded_items', 0) or 0)
+                                for n in target_nodes
+                            )
+                            progress_callback(done_images, total_images)
                         if status_callback:
                             status_callback('downloaded', {
                                 'node_id': node.id,
