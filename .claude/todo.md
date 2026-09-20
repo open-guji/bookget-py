@@ -48,9 +48,23 @@
 
 ### 尚未做（交给下一轮）
 - **推送 + 打 tag v0.4.0**：本轮所有提交仍在本地 master，未 push
-- `master` → `main` 改名（P2）
-- nlc_read 未声明 supports_* 标志（README 已手工标注，代码待修）
-- ruff 14 处既有告警（`__all__` 未排序等，非本轮引入）
+  （用户要先自己过目；tag 会触发 PyPI + GitHub Release）
+- `master` → `main` 改名（P2，唯一剩下的 P2 项）
+- `[tiles]` 的 Pillow 仍是惰性 import，缺失时行为待统一
+- nlc_guji：册名（volumeTitle）在 get_image_list 里拿到却传不下去，
+  因 Resource 无 title 字段；要带下去需加模型字段，已在代码里注明现状
+
+### 2026-09-19 第二轮追加（P2 已清）
+- 版权归属改为 **开源古籍 (open-guji)**，不写个人名（LICENSE + pyproject authors）
+- **PDF-only 站点不再被 discover 跳过**：`discover` 只看 supports_images，
+  而 nlc_read 声明 images=False/pdf=True 且 PDF 也从 get_image_list 返回
+  → manifest 恒为空。改为 `supports_images or supports_pdf`，
+  server 能力上报补 supports_pdf，README 加 PDF 列（整表全部取自代码声明）
+- **ruff 从「约 700 条无人看」变成全绿**：加 [tool.ruff] 收敛到 pyflakes +
+  真错类规则，--fix 清 447 条未用 import，手工删 6 处死变量
+- **CJK_VARIANTS 有重复键**（F601）：`'餘'` 出现两次，后者静默覆盖前者。
+  实测三形仍两两匹配故无线上影响；已删重复并加 AST 守卫测试
+- 测试 511 → **517 passed**
 
 ---
 
@@ -122,10 +136,11 @@ dependencies 和所有 extra 都没声明它。** 代码写了「OpenCC 缺失�
 ## P2 — 卫生与一致性
 
 - [ ] 分支名 `master` → `main`，与 kaiyuanguji-web / book-index 等仓拉齐
-- [ ] 本档旧记录里多处「离线 XXX passed 全绿」已不准（实测 3 failed），
-      修完 0.2 后统一订正，勿再直接引用旧数字
-- [ ] `[browser]` / `[tiles]` / `[ia]` 三个 extra 的缺失依赖，在运行期都走「静默降级」
-      路线。应统一为：缺依赖时给**明确中文提示**，而不是悄悄少功能（同 0.2 的教训）
+- [x] 本档旧记录里多处「离线 XXX passed 全绿」已不准（实测 3 failed）
+      → 已修，当前 **517 passed / 0 failed**；引用测试数请以实跑为准
+- [x] extra 缺失依赖的「静默降级」→ 已处理：OpenCC 升为正式依赖且缺失时告警；
+      识典缺 Playwright 时给中文指引（exe 环境单独措辞）。
+      `[tiles]` 的 Pillow 仍是惰性 import，待同样处理
 
 ---
 

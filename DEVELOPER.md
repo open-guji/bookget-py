@@ -14,12 +14,18 @@ playwright install chromium
 # 需要用到 Internet Archive 上传功能时再加装
 pip install -e ".[ia]"
 
-# 代码检查
+# 代码检查（应当全绿；配置见 pyproject [tool.ruff]）
 ruff check bookget/
 
 # 运行测试
 pytest tests/
 ```
+
+> **lint 口径**：`select = ["F","E4","E7","E9"]`，即 pyflakes（未定义名、
+> 未使用 import/变量、重复 dict 键这类**真错**）加上会真正出问题的那部分
+> pycodestyle，不含大段风格规则。此前无配置、按全默认规则会报约 700 条，
+> 绝大多数是风格噪音，导致整体被无视、真问题被淹没。要放宽请**有意识地**
+> 改这份 select，别顺手加回全量。`ruff check` 现在是全绿的，新增告警即回归。
 
 ## 项目结构
 
