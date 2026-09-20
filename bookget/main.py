@@ -529,6 +529,73 @@ def cmd_ia_check(args):
     cmd_check(args)
 
 
+def cmd_selftest(args) -> int:
+    """Verify this build has everything it needs — used to smoke-test the exe.
+
+    A PyInstaller build can succeed while silently omitting a dependency, so
+    the failure only shows up for users (this is exactly how the packaged exe
+    ended up without Pillow, breaking every tiled site). Checking here means a
+    broken binary fails the release instead of shipping.
+    """
+    from bookget.adapters.registry import AdapterRegistry
+
+    ok = True
+
+    def check(label, fn, required=True):
+        nonlocal ok
+        try:
+            detail = fn()
+            print(f"  [ok]   {label}{f': {detail}' if detail else ''}")
+            return True
+        except Exception as e:
+            marker = "FAIL" if required else "warn"
+            print(f"  [{marker}] {label}: {e}")
+            if required:
+                ok = False
+            return False
+
+    print(f"bookget {__import__('bookget').__version__}")
+    print(f"frozen: {bool(getattr(sys, 'frozen', False))}")
+    print("checks:")
+
+    def _adapters():
+        n = len(AdapterRegistry.list_adapters())
+        if n < 37:
+            raise RuntimeError(f"only {n} adapters registered (expected >= 37)")
+        return f"{n} adapters"
+
+    def _opencc():
+        # Silent degradation risk: without OpenCC, 论语 stops matching 論語
+        # and search/match just returns fewer results, with no error.
+        from bookget.shared import cjk_match
+        if not cjk_match.title_matches("论语", ["論語"]):
+            raise RuntimeError("繁简 matching not working (OpenCC missing?)")
+        return "繁简 matching OK"
+
+    def _pillow():
+        # Needed by downloaders/tiles.py to stitch Zoomify tiles (TNM).
+        from PIL import Image  # noqa: F401
+        return "Pillow available (tiled sites)"
+
+    def _aiohttp():
+        import yarl  # noqa: F401
+        return "aiohttp + yarl"
+
+    check("adapters", _adapters)
+    check("opencc", _opencc)
+    check("pillow", _pillow)
+    check("http stack", _aiohttp)
+    # Optional: only bundled when built with the [browser] / [ia] extras.
+    check("playwright (识典古籍)", lambda: __import__("playwright") and "available",
+          required=False)
+    check("internetarchive (upload)",
+          lambda: __import__("internetarchive") and "available", required=False)
+
+    print()
+    print("RESULT:", "PASS" if ok else "FAIL")
+    return 0 if ok else 1
+
+
 async def cmd_serve(args, config: Config):
     """Handle serve command — start HTTP server."""
     from bookget.server.app import run_server
@@ -785,6 +852,10 @@ def main():
     p_match.add_argument("--json", action="store_true", help="Output JSON format")
 
     # sites command
+    subparsers.add_parser(
+        "selftest",
+        help="Check this build has all bundled dependencies (for packaged exe)")
+
     p_sites = subparsers.add_parser("sites", help="List or check supported sites")
     p_sites.add_argument("--list", action="store_true", help="List all sites")
     p_sites.add_argument("--check", type=str, help="Check if URL is supported")
@@ -857,6 +928,8 @@ def main():
             asyncio.run(cmd_match(args, config))
         elif args.command == "search":
             asyncio.run(cmd_search(args, config))
+        elif args.command == "selftest":
+            sys.exit(cmd_selftest(args))
         elif args.command == "sites":
             cmd_sites(args)
         elif args.command == "upload":

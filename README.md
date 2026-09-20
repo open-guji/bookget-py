@@ -79,6 +79,12 @@
 | `bookget-cli-macos` | macOS 命令行工具 |
 | `bookget-ui-windows.exe` | Windows 图形界面，双击打开浏览器操作 |
 
+下载后可先跑一次自检，确认这份可执行文件依赖齐全：
+
+```bash
+bookget-cli selftest
+```
+
 > **注意：识典古籍需要额外安装浏览器内核。** exe 里不包含 Playwright/Chromium
 > （体积过大），所以用 exe 下载识典古籍会提示缺少浏览器。需要下载识典的，
 > 请改用下面的 pip 方式并执行 `playwright install chromium`。其余 36 个站点

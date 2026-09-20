@@ -38,7 +38,11 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install -e ".[dev]"
+          # [tiles] pulls in Pillow, which the exe needs to stitch Zoomify
+          # tiles (TNM). Without it PyInstaller silently ships an exe that
+          # fails on those sites — the spec's hiddenimports can only bundle
+          # what is actually installed in the build env.
+          pip install -e ".[dev,tiles]"
           pip install pyinstaller
 
       - name: Install frontend dependencies
@@ -47,6 +51,35 @@ jobs:
 
       - name: Build executables
         run: python packaging/build.py
+
+      # Fail the release here rather than shipping a broken binary. These
+      # checks catch the failure mode that bit us before: the exe builds
+      # fine but is missing a bundled dependency, so it only breaks for
+      # users. Offline-only — no network calls.
+      - name: Smoke-test built executables
+        shell: bash
+        run: |
+          set -e
+          CLI="dist/bookget-cli${{ matrix.suffix }}"
+
+          echo "--- adapters registered ---"
+          COUNT=$("$CLI" sites --list --json | python -c "import sys,json;print(len(json.load(sys.stdin)))")
+          echo "adapters: $COUNT"
+          if [ "$COUNT" -lt 37 ]; then
+            echo "::error::only $COUNT adapters in the exe (expected >= 37)"
+            exit 1
+          fi
+
+          echo "--- bundled deps importable inside the exe ---"
+          # opencc: 繁简 matching degrades SILENTLY without it.
+          # PIL: needed to stitch Zoomify tiles (TNM).
+          "$CLI" selftest
+
+          echo "--- batch download flags present ---"
+          "$CLI" download --help | grep -q -- "--url-file"
+          "$CLI" download --help | grep -q -- "--retry-failed"
+
+          echo "smoke tests passed"
 
       - name: Rename artifacts with platform suffix
         shell: bash

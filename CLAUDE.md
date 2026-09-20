@@ -65,6 +65,10 @@ bookget/
 - **签名 URL 不能让 aiohttp 规范化**：x-signature 里的 %2F 会被解成 /，
   签名失效返回 403。统一走 `downloaders.base.request_url()`
   （yarl.URL(..., encoded=True)）。
+- **打包 exe 会静默少依赖**：PyInstaller 只打进构建环境里**装了的**东西，
+  spec 的 hiddenimports 救不了没装的包；两个 spec 还一度把 PIL 写进
+  excludes，导致瓦片站只在 exe 里坏。改 spec / 改依赖后跑
+  `bookget-cli selftest`（CI 也会跑，不过就发不出去）。
 - **书籍 ID 不保证是合法路径名**：CText 的形如 `path:analects`，
   `:` 在 Windows 上非法。落盘前过 `_safe_dirname()`。
 
