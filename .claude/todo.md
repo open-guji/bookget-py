@@ -211,11 +211,25 @@ dependencies 和所有 extra 都没声明它。** 代码写了「OpenCC 缺失�
 - 或明确降级为 extra，但需在 search/match 路径给出显式 WARNING，不能静默
 - 修完三个测试应转绿；**不要改测试去迁就代码**
 
-### [~] 0.3 发 v0.4.0，把 18 个适配器交付给用户（版本已 bump，**待推送打 tag**）
+### [~] 0.3 发 v0.4.0，把 18 个适配器交付给用户（**只差一条 tag 命令，需本人执行**）
 这是对两个 issue 最直接的回应。
-- 确认 release.yml 仍可跑（近期无 run 记录，需 workflow_dispatch 验证一次）
-- README 站点表需从 19 站更新到 37 站
-- 发版后在 issue #1 / #2 下回复，告知新版本
+- [x] 确认 release.yml 仍可跑：2026-09-20 用 workflow_dispatch 空跑 run #9，
+      **三平台全绿**（构建 + selftest 冒烟 + 适配器计数 ≥37 + 批量下载 flag）。
+      `pypi` / `release` 两个 job 按 `if: startsWith(github.ref, 'refs/tags/')`
+      正确 skip——手动触发不会误发布，这条空跑以后每次发版前都该做
+- [x] README 站点表已是 37 站（旧记录说「需从 19 更新」已过时）
+- [x] PyPI 侧已确认：`bookget` 项目存在（最新 0.3.4），Trusted Publisher 此前
+      跑通过，0.4.0 未被占用
+- [ ] **打 tag 推送——沙箱做不了**：Claude 会话的 git 凭据只允许推指定的
+      `claude/*` 分支，推 tag ref 恒返回 **HTTP 403**（退避重试 5 次全同）；
+      代理 `recentRelayFailures` 为空，不是出网策略。GitHub MCP 也没有建
+      tag / 建 Release 的接口。**需本人在本地执行**：
+      ```bash
+      git fetch origin main
+      git tag -a v0.4.0 origin/main -m "v0.4.0"
+      git push origin v0.4.0      # 只推 tag，不动分支
+      ```
+- [ ] 发版后在 issue #1 / #2 下回复，告知新版本
 
 ---
 
@@ -256,7 +270,8 @@ dependencies 和所有 extra 都没声明它。** 代码写了「OpenCC 缺失�
 
 ## P2 — 卫生与一致性
 
-- [ ] 分支名 `master` → `main`，与 kaiyuanguji-web / book-index 等仓拉齐
+- [x] 分支名 `master` → `main`（已完成：远端只剩 `main`；本档上方多处仍写 `master`，
+      `.claude/commands/release.md` 也一并改过来了）
 - [x] 本档旧记录里多处「离线 XXX passed 全绿」已不准（实测 3 failed）
       → 已修，当前 **517 passed / 0 failed**；引用测试数请以实跑为准
 - [x] extra 缺失依赖的「静默降级」→ 已处理：OpenCC 升为正式依赖且缺失时告警；
