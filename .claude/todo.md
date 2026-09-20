@@ -54,6 +54,28 @@
 - nlc_guji：册名（volumeTitle）在 get_image_list 里拿到却传不下去，
   因 Resource 无 title 字段；要带下去需加模型字段，已在代码里注明现状
 
+### 2026-09-19 第三轮：exe 实测（发布前把关）
+真把 bookget-cli.exe / bookget-ui.exe 构建出来逐项跑，修掉三个只在打包环境
+暴露的问题：
+- **两个 spec 都把 PIL 放进 excludes**，而 tiles.py 需要它拼 Zoomify 瓦片
+  → exe 里必然缺 Pillow，开发环境却正常（典型「只在发布版坏」）
+- **opencc 未进 hiddenimports**（本轮刚升为正式依赖）
+- **瓦片站在普通 download 路径上全军覆没**：TNM 的 Resource.url 是瓦片基址，
+  裸 GET 必 404；拼接只写在 download_node 里，而它只有 --incremental 会调用。
+  适配器加 fetch_resource()，ResourceManager 有则用之。0/140 → 133 张
+  （5760×3840，PIL 校验全有效）。
+  **坑**：探测 fetch_resource 要查**类**不能查实例——Mock 适配器对任何属性名
+  都返回 mock，按实例探测会把真实下载导进不可 await 的桩（既有测试当场抓到）
+- 另修 CText 标题未做 HTML 实体反转义（三处只有一处 unescape）
+- **CI 只装 `[dev]`**，Pillow 根本不在构建环境里，光改 spec 没用 → 改
+  `[dev,tiles]`，并新增 `bookget selftest` + release.yml 构建后冒烟，
+  构建坏了直接发不出去。故意把 PIL 写回 excludes 验证过这道闸拦得住
+  （体积 19.9MB→13.8MB，PyInstaller 仍报成功，selftest 退出码 1）
+
+exe 实测通过：37 适配器、OpenCC、CText 元数据、批量下载、梵蒂冈 IIIF
+162/162 零失败、TNM 瓦片 133 张、UI exe 前端与 API 均 200 且真下完 163 个
+文件、识典在 exe 给中文指引。测试 517 → **523 passed**。
+
 ### 2026-09-19 第二轮追加（P2 已清）
 - 版权归属改为 **开源古籍 (open-guji)**，不写个人名（LICENSE + pyproject authors）
 - **PDF-only 站点不再被 discover 跳过**：`discover` 只看 supports_images，
