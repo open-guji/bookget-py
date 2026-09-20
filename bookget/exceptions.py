@@ -23,6 +23,25 @@ class MetadataExtractionError(AdapterError):
     pass
 
 
+class SiteChallengeError(MetadataExtractionError):
+    """Site answered a bot challenge instead of content.
+
+    A WAF challenge is not a transient failure and not a bad URL: no amount
+    of retrying or URL-fixing gets past it, so it needs to be said plainly
+    rather than surfacing as "manifest is not valid JSON".
+    """
+    def __init__(self, site_id: str, url: str, signal: str = ""):
+        self.site_id = site_id
+        self.url = url
+        self.signal = signal
+        detail = f"（{signal}）" if signal else ""
+        super().__init__(
+            f"[{site_id}] 站点用机器人挑战拦下了请求{detail}：{url}\n"
+            f"该站要求浏览器执行 JS 挑战才放行，普通 HTTP 客户端拿不到内容。"
+            f"本站点目前不可用，与 URL 是否正确无关。"
+        )
+
+
 class DownloadError(GujiResourceError):
     """Error during resource download."""
     pass

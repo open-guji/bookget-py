@@ -1,6 +1,7 @@
 # Base IIIF Adapter - Handles IIIF-compatible digital libraries
 
 import asyncio
+import json
 import os
 from pathlib import Path
 from typing import List, Optional, Any
@@ -12,7 +13,7 @@ from ..registry import AdapterRegistry
 from ...models.book import BookMetadata, Resource, ResourceType, Creator
 from ...models.manifest import ManifestNode, NodeStatus
 from ...logger import logger
-from ...exceptions import MetadataExtractionError
+from ...exceptions import MetadataExtractionError, SiteChallengeError
 
 
 class BaseIIIFAdapter(BaseSiteAdapter):
@@ -74,6 +75,24 @@ class BaseIIIFAdapter(BaseSiteAdapter):
             return self.manifest_url_template.format(book_id=book_id)
         raise NotImplementedError("Subclass must implement get_manifest_url or set manifest_url_template")
 
+    @staticmethod
+    def _challenge_signal(status: int, headers, body: bytes) -> str:
+        """Name the bot challenge in a response, or "" if it looks like content.
+
+        AWS WAF answers non-browser clients with HTTP 202 and an empty body
+        (the real page carries a JS challenge), and marks it with
+        `x-amzn-waf-action`. Berkeley's digicoll serves its whole site that
+        way, so the manifest fetch used to fail as "not valid JSON" — which
+        reads like a wrong URL and sends you looking for a better template
+        that does not exist.
+        """
+        waf_action = headers.get("x-amzn-waf-action", "")
+        if waf_action:
+            return f"HTTP {status}, x-amzn-waf-action: {waf_action}"
+        if status == 202 and not body.strip():
+            return f"HTTP {status}, 空响应体"
+        return ""
+
     async def get_iiif_manifest(self, book_id: str) -> Optional[dict]:
         """Fetch and parse IIIF manifest."""
         url = self.get_manifest_url(book_id)
@@ -82,10 +101,26 @@ class BaseIIIFAdapter(BaseSiteAdapter):
 
         try:
             async with session.get(url, headers=headers) as response:
+                body = await response.read()
+                signal = self._challenge_signal(
+                    response.status, response.headers, body)
+                if signal:
+                    raise SiteChallengeError(self.site_id, url, signal)
+
                 response.raise_for_status()
-                # content_type=None: some servers send manifests as text/html
-                # or text/plain; don't let aiohttp's strict mimetype check fail.
-                return await response.json(content_type=None)
+                # Parse the bytes ourselves: some servers send manifests as
+                # text/html or text/plain, and aiohttp's strict mimetype check
+                # would reject those.
+                try:
+                    return json.loads(body)
+                except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                    raise MetadataExtractionError(
+                        f"[{self.site_id}] IIIF manifest 不是有效的 JSON"
+                        f"（HTTP {response.status}）：{url}\n"
+                        f"（站点可能改了 manifest 地址，或该条目需要登录）"
+                    ) from e
+        except MetadataExtractionError:
+            raise
         except Exception as e:
             logger.error(f"Failed to fetch manifest: {e}")
             raise MetadataExtractionError(f"Failed to fetch IIIF manifest: {e}")
