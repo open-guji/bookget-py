@@ -55,16 +55,38 @@
 
 ## B. 已知不工作 / 未验证（比加新站更该先办）
 
-- [ ] **Berkeley manifest 模板是错的**：`digicoll.lib.berkeley.edu/iiif/{id}/manifest.json`
-      返回 HTTP 202 而非 JSON，该适配器**从来没成功过**。
-      （2026-09-20 已让报错可读，但模板仍需用 chrome-mcp 抓真实 manifest 反推）
-- [ ] **17 个适配器从未做过 live 验证**（`live_urls.yaml` 只登记了 20/37）：
-      archive_org、berkeley、bnf_gallica、british_library、generic_iiif、
+- [x] ~~Berkeley manifest 模板是错的~~ **判断本身是错的**（2026-09-20 实测订正）：
+      `digicoll.lib.berkeley.edu` **整站挂在 AWS WAF 的 JS 挑战后面**，
+      任何普通 HTTP 客户端都拿 `HTTP 202 + 空体 + x-amzn-waf-action: challenge`。
+      模板对不对**无从验证**——连 record 页都进不去，不存在「抓真实 manifest 反推」
+      这条路。沙箱实测：无头 Chromium（代理 CA 已导入 NSS，TLS 正常）访问直接 **403,
+      `server: awselb/2.0`**，是 Berkeley 自己的 ELB 拒绝，非出网策略。
+      已做：base_iiif 识别挑战并明说「与 URL 是否正确无关」（覆盖 23 个 IIIF 适配器）。
+      **待决**：要么标为不支持，要么做浏览器路径——后者需要**非数据中心 IP**，
+      沙箱做不了，只能在本人机器上验证。
+- [ ] **hkust 已挂——站点整体迁移**（2026-09-20 live 测试撞出来的新问题）：
+      `lbezone.hkust.edu.hk/bib/{id}` 现在 302 跳到
+      `digitalcollections.hkust.edu.hk/Detail/objects/{id}`，新平台是
+      **CollectiveAccess**，旧的 BookReader sPath 抓取路径彻底失效。
+      已摸清的线索：Detail 页 HTML 里有 `/service.php/IIIF/manifest/ca_objects:{内部ID}`
+      （内部 ID ≠ 旧的 b 号，如 b334647 → 9200），该 manifest 是 **IIIF v3**、可取；
+      但图片 `/service.php/IIIF/representation:{id}:{n}/full/max/0/default.jpg`
+      **返回 403**（info.json 却是 200），带 Referer/Origin/UA 均无效，还缺别的凭据。
+      且该对象的 manifest 只有 Ebook/Thumb 两个 representation，**不是逐页图**。
+      → 这是**整站重写 + 认证反推**，不是改模板，需单独立项
+- [ ] **16 个适配器从未做过 live 验证**（`live_urls.yaml` 已登记 21/37，
+      2026-09-20 补进 archive_org）：
+      berkeley（WAF 全拦，见上）、bnf_gallica、british_library、generic_iiif、
       hanchi、harvard、hku、kyoto_rmda、ncl_rbook、nlc_guji、nlc_read、
       npm_taipei、princeton、shidianguji、stanford、wikimedia_commons。
       **发布前应逐个拿真实 URL 跑通**——本轮抽查 10 个就有 1 个真 bug
       （Berkeley）、1 个 0 图（archive_org 需确认取图逻辑）。
-- [ ] **archive_org 返回 0 图**：需确认是样本问题还是取图逻辑问题
+- [x] **archive_org 返回 0 图 = 真 bug，已修**（2026-09-20）：代码假定每个 item 都有
+      `{identifier}_tif.zip` 和 imagecount，而 IA 现在多数扫描本只发 `_jp2.zip`、
+      派生名还常常不等于 identifier（`in.ernet.dli.2015.282` 的栈叫
+      `2015.282.Tory-Lives-...._jp2.zip`），imagecount 也常缺。改走 BookReader 的
+      JSIA 接口拿页表（自带前缀/页数/每页 URL），模板降为兜底，**取不到页改为抛错**。
+      实测 0→173、0→16，另一样本 90→90 不变；已登记 live_urls 并通过
 - [ ] **hku / cuhk 网络受限**：hku 用户与沙箱均访问不通；cuhk WAF 全拦
 
 ## C. 功能缺口（UI 侧）
