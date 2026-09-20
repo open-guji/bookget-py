@@ -162,10 +162,26 @@ class IDPAdapter(BaseSiteAdapter):
             raise MetadataExtractionError(
                 f"[idp] 取条目页失败：{url}（{e}）") from e
 
+    def _empty_page_hint(self, book_id: str) -> str:
+        """Why an item page came back empty — usually an expired session."""
+        if _UID_RE.search(self.item_url(book_id)):
+            return ("（**uid 很可能已过期**——它是检索会话 token，不是固定编号，"
+                    "过期后站点返回一个空页而不是报错。请重新从站内检索取一条新地址，"
+                    "或改用稳定的 pressmark 入口："
+                    "oo_loader.a4d?pm=<架位号>）")
+        return "（该条目可能无影像，或镜像站改版了）"
+
     async def get_metadata(self, book_id: str, index_id: str = "") -> BookMetadata:
         html = await self._fetch_item_page(book_id)
         recnums, folios = self.parse_item_page(html)
         self._pages[book_id] = recnums
+
+        if not recnums and not folios:
+            # An expired uid yields a page with neither images nor labels;
+            # falling back to a synthetic title would hide that.
+            raise MetadataExtractionError(
+                f"[idp] 条目页是空的：{self.item_url(book_id)}\n"
+                f"{self._empty_page_hint(book_id)}")
 
         _, host = self._origin(book_id)
         metadata = BookMetadata(
@@ -192,7 +208,7 @@ class IDPAdapter(BaseSiteAdapter):
             # Silence here would report a successful download of nothing.
             raise MetadataExtractionError(
                 f"[idp] 条目页里没有图片记录：{self.item_url(book_id)}\n"
-                f"（该 uid 可能无影像，或镜像站改版了）")
+                f"{self._empty_page_hint(book_id)}")
 
         logger.info(f"IDP {book_id}: {len(recnums)} images on {self._origin(book_id)[1]}")
         return [

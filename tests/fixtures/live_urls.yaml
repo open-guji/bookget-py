@@ -180,10 +180,12 @@ items:
     # RSL 多数馆藏在版权期内、取页 403；这本是 accessLevel=free 的样本
 
   - site_id: idp
-    url: "http://idp.bbaw.de/database/oo_scroll_h.a4d?uid=5475972796;bst=1;recnum=69129;index=1;img=1"
+    url: "http://idp.bbaw.de/database/oo_loader.a4d?pm=Ch%201"
     kind: images
     min_images: 2
     title_contains: "Ch 1"
+    # 必须用 pressmark 入口：uid 是检索会话 token，会过期——本档原先登记的
+    # uid 地址在几小时后就失效了（站点返回空页而非报错），live 随之变红。
     # 柏林镜像；idp.bl.uk 被 Cloudflare 403、其余镜像沙箱连不上，
     # 但七个镜像跑同一套软件，验通一个即验通取图路径
 
