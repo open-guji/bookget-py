@@ -1,7 +1,8 @@
 # Internet Archive (archive.org) Adapter
 
 import re
-from typing import List, Optional
+from typing import List, Optional, Tuple
+from urllib.parse import urlencode
 import aiohttp
 
 from ..base import BaseSiteAdapter
@@ -114,16 +115,6 @@ class ArchiveOrgAdapter(BaseSiteAdapter):
         elif creator:
             metadata.creators.append(Creator(name=creator))
 
-        # Parse page count from files list
-        files = data.get("files", [])
-
-        # Count actual TIF pages from scandata or file listing
-        for f in files:
-            name = f.get("name", "")
-            if name.endswith("_tif.zip"):
-                # Try to get file count from the TIF zip
-                pass
-
         # Get imagecount from metadata if available
         imagecount = ia_meta.get("imagecount", "0")
         try:
@@ -134,67 +125,178 @@ class ArchiveOrgAdapter(BaseSiteAdapter):
         metadata.raw_metadata = ia_meta
         return metadata
 
-    async def get_image_list(self, book_id: str) -> List[Resource]:
-        """Get list of page images using BookReader API.
+    # Image derivatives, best first. Modern IA scans ship JP2; only older
+    # items still carry a TIF stack, and a handful carry plain JPEGs.
+    _IMAGE_ZIP_SUFFIXES = ("_jp2.zip", "_tif.zip", "_jpg.zip")
 
-        Strategy:
-        1. Fetch metadata to get server, dir, and page count
-        2. Construct BookReader image URLs for each page
+    @classmethod
+    def _find_image_derivative(
+        cls, files: List[dict], identifier: str
+    ) -> Optional[Tuple[str, str]]:
+        """Locate the item's image stack, as ``(sub_prefix, kind)``.
+
+        The derivative is NOT always named after the identifier: item
+        ``in.ernet.dli.2015.282`` ships
+        ``2015.282.Tory-Lives-From-Falkland-To-Disraeli_jp2.zip``. Assuming
+        ``{identifier}_tif.zip`` (what this adapter used to do) misses every
+        such item, and every JP2-only item besides. Prefer the derivative
+        actually named after the identifier, since items can carry several
+        stacks (``_orig_tif.zip`` next to ``_tif.zip``).
         """
-        data = await self._fetch_ia_metadata(book_id)
-        if not data:
-            return []
+        names = [f.get("name", "") for f in files if isinstance(f, dict)]
+        for suffix in cls._IMAGE_ZIP_SUFFIXES:
+            kind = suffix[1:-4]  # "_jp2.zip" -> "jp2"
+            if f"{identifier}{suffix}" in names:
+                return identifier, kind
+            for name in names:
+                if name.endswith(suffix) and "/" not in name:
+                    return name[: -len(suffix)], kind
+        return None
 
-        server = data.get("d1", "") or data.get("server", "")
-        d = data.get("dir", "")
-        ia_meta = data.get("metadata", {})
+    @staticmethod
+    def _resources_from_jsia(book_id: str, payload: dict) -> List[Resource]:
+        """Turn a BookReaderJSIA payload into page resources.
 
-        if not server or not d:
-            logger.warning(f"Missing server/dir info for {book_id}")
-            return []
+        ``brOptions.data`` is a list of *spreads*, each a list of page dicts,
+        so it has to be flattened rather than counted.
+        """
+        br = ((payload or {}).get("data") or {}).get("brOptions") or {}
+        resources: List[Resource] = []
+        for spread in br.get("data") or []:
+            pages = spread if isinstance(spread, list) else [spread]
+            for page in pages:
+                uri = (page or {}).get("uri")
+                if not uri:
+                    continue
+                try:
+                    leaf = int(page.get("leafNum", len(resources) + 1))
+                except (TypeError, ValueError):
+                    leaf = len(resources) + 1
+                resources.append(Resource(
+                    url=uri,
+                    resource_type=ResourceType.IMAGE,
+                    order=leaf,
+                    page=str(leaf),
+                    # BookReaderImages.php always answers JPEG, whatever the
+                    # stack it reads from.
+                    filename=f"{book_id}_{leaf:04d}.jpg",
+                ))
+        return resources
 
-        # Get total page count
-        imagecount = 0
-        try:
-            imagecount = int(ia_meta.get("imagecount", "0"))
-        except (ValueError, TypeError):
-            pass
-
-        if imagecount == 0:
-            # Try to count TIF files in the file list
-            files = data.get("files", [])
-            tif_files = [f for f in files if f.get("name", "").endswith(".tif")
-                         and "/" in f.get("name", "")]
-            imagecount = len(tif_files)
-
-        if imagecount == 0:
-            logger.warning(f"Could not determine page count for {book_id}")
-            return []
-
-        logger.info(f"Archive.org {book_id}: {imagecount} pages on {server}")
-
+    @staticmethod
+    def _resources_from_template(
+        book_id: str, server: str, item_path: str,
+        sub_prefix: str, kind: str, count: int,
+    ) -> List[Resource]:
+        """Build page URLs by hand, for items BookReader refuses to serve."""
         resources = []
-        for page_num in range(1, imagecount + 1):
+        for page_num in range(1, count + 1):
             page_str = f"{page_num:04d}"
-
-            # BookReader API URL for individual page as JPEG
             img_url = (
                 f"https://{server}/BookReader/BookReaderImages.php?"
-                f"zip={d}/{book_id}_tif.zip&"
-                f"file={book_id}_tif/{book_id}_{page_str}.tif&"
+                f"zip={item_path}/{sub_prefix}_{kind}.zip&"
+                f"file={sub_prefix}_{kind}/{sub_prefix}_{page_str}.{kind}&"
                 f"id={book_id}&scale=1&rotate=0"
             )
-
-            resource = Resource(
+            resources.append(Resource(
                 url=img_url,
                 resource_type=ResourceType.IMAGE,
                 order=page_num,
                 page=str(page_num),
                 filename=f"{book_id}_{page_str}.jpg",
-            )
-            resources.append(resource)
-
+            ))
         return resources
+
+    async def _pages_from_bookreader(
+        self, book_id: str, server: str, item_path: str, sub_prefix: str,
+    ) -> List[Resource]:
+        """Ask BookReader itself for the page list."""
+        params = {
+            "id": book_id,
+            "itemPath": item_path,
+            "server": server,
+            "format": "json",
+        }
+        if sub_prefix:
+            params["subPrefix"] = sub_prefix
+        url = f"https://{server}/BookReader/BookReaderJSIA.php?{urlencode(params)}"
+
+        session = await self.get_session()
+        try:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    logger.warning(
+                        f"BookReader API returned {response.status} for {book_id}")
+                    return []
+                # content_type=None: the endpoint has been seen answering
+                # with a non-JSON content type, which strict .json() rejects.
+                payload = await response.json(content_type=None)
+        except Exception as e:
+            logger.warning(f"BookReader API failed for {book_id}: {e}")
+            return []
+
+        error = (payload or {}).get("error")
+        if error:
+            logger.warning(f"BookReader API error for {book_id}: {error}")
+            return []
+        return self._resources_from_jsia(book_id, payload)
+
+    async def get_image_list(self, book_id: str) -> List[Resource]:
+        """Get the item's page images.
+
+        BookReader's own JSIA endpoint is the source of truth: it knows the
+        derivative prefix, the page count and the per-page URLs, so it covers
+        JP2-only items and items whose derivative is not named after the
+        identifier. The hand-built template stays as a fallback for items it
+        refuses to serve.
+        """
+        data = await self._fetch_ia_metadata(book_id)
+        if not data:
+            raise MetadataExtractionError(
+                f"archive.org metadata API returned nothing for {book_id}")
+
+        server = data.get("d1", "") or data.get("server", "")
+        item_path = data.get("dir", "")
+        if not server or not item_path:
+            raise MetadataExtractionError(
+                f"archive.org metadata for {book_id} carries no server/dir; "
+                f"the item may be dark or purely a collection")
+
+        derivative = self._find_image_derivative(data.get("files", []), book_id)
+        sub_prefix, kind = derivative if derivative else (book_id, "jp2")
+
+        resources = await self._pages_from_bookreader(
+            book_id, server, item_path, sub_prefix)
+        if resources:
+            logger.info(
+                f"Archive.org {book_id}: {len(resources)} pages via BookReader "
+                f"(stack: {sub_prefix}_{kind})")
+            return resources
+
+        imagecount = 0
+        try:
+            imagecount = int(data.get("metadata", {}).get("imagecount", 0))
+        except (ValueError, TypeError):
+            imagecount = 0
+
+        if derivative and imagecount:
+            logger.info(
+                f"Archive.org {book_id}: BookReader gave nothing, falling back "
+                f"to {imagecount} templated pages (stack: {sub_prefix}_{kind})")
+            return self._resources_from_template(
+                book_id, server, item_path, sub_prefix, kind, imagecount)
+
+        # This used to `return []`, which made the adapter report a successful
+        # download of zero images. An empty page list is a failure, not a result.
+        stacks = sorted({
+            f.get("name", "") for f in data.get("files", [])
+            if f.get("name", "").endswith(".zip")
+        })
+        raise MetadataExtractionError(
+            f"archive.org item {book_id}: BookReader returned no pages and the "
+            f"item has no usable image derivative (zips present: {stacks or 'none'}). "
+            f"Items that are audio/video, lending-restricted or text-only have no "
+            f"page images to download.")
 
     async def get_pdf_url(self, book_id: str) -> Optional[str]:
         """Get PDF download URL."""

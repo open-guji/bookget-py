@@ -117,6 +117,13 @@ items:
     # Title field uses shinjitai (総葉概録). Skip title_contains to avoid the
     # variant mismatch — non-empty title is still asserted.
 
+  # --- Non-IIIF image sites ---
+  - site_id: archive_org
+    url: "https://archive.org/details/06064237.cn"
+    kind: images
+    min_images: 80
+    title_contains: "簡明目錄"
+
   # --- Text sites ---
   - site_id: ctext
     url: "https://ctext.org/analects/xue-er"
