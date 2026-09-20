@@ -138,6 +138,7 @@ token 不是条目 id，只带 uid 会**静默返回另一件藏品**；上游 G
 | 站点 | 症状 |
 |---|---|
 | 广州大典 `gzdd.gzlib.org.cn` | 可达；`api/Search/Detail` 元数据免登录，`api/Search/ReadBook` 页图 401 需 Bearer + fingerprint |
+| 国家哲社 `www.ncpssd.cn` | 可达，首页就有古籍列表入口；但取书接口 `/Literature/readurl` **302 跳 `/login`** |
 | 南京大学 `jsgxgj.nju.edu.cn` | 可达；取图接口 `/portal/book/view` 直接回 `{"code":10006,"message":"用户未登录"}`，且 bookId 是加密的（`getBookById` 报「解码失败」） |
 
 ### 站点反爬 / 封本沙箱 IP（本机大概率可用）
@@ -157,7 +158,14 @@ token 不是条目 id，只带 uid 会**静默返回另一件藏品**；上游 G
   甘肃 `zszy.gslib.com.cn`、温州 `oyjy.wzlib.cn`、央美 `dlib.cafa.edu.cn`、
   NLC 子站 `mylib.nlc.cn` / `ouroots.nlc.cn`
 - 日韩：京大人文研 `kanji.zinbun.kyoto-u.ac.jp`、駒澤 `repo.komazawa-u.ac.jp`、
-  奎章阁 `kyudb.snu.ac.kr`
+  奎章阁 `kyudb.snu.ac.kr`、高丽大 `kostma.korea.ac.kr`
+- 韩国国立中央图书馆 `lod.nl.go.kr`：**503**，取图主机 `viewer.nl.go.kr:8080`
+  也连不上（上游正是走这个主机）
+- 越南汉喃 `hannom.nlv.gov.vn`、云南方志 `dfz.yn.gov.cn`、近代史
+  `www.modernhistory.org.cn` 连不上；HathiTrust、史密森 `asia.si.edu`、
+  山东中医药大学 `gjsztsg.sdutcm.edu.cn` 一律 **403**
+- **普林斯顿 catalog 域不必做**：`catalog.princeton.edu` 的记录是纯印本 MARC，
+  字段里没有任何数字对象；普林的数字化影像在 figgy/dpul，已由 princeton 适配器覆盖
 - IDP 镜像：俄罗斯 `idp.orientalstudies.ru`（503）、韩国 `idp.korea.ac.kr`（DNS 不解析）
 - `hku`：IIIF 主机可达但 catalog 主机连接被丢弃；且 fixture 里的 id 返回空 manifest
   （**旧档记的「站点疑下线」已过时**）

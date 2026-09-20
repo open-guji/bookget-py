@@ -173,6 +173,12 @@ items:
     min_images: 250
     title_contains: "近代著述目録"
 
+  - site_id: rsl
+    url: "https://viewer.rsl.ru/ru/rsl01000001234"
+    kind: images
+    min_images: 30
+    # RSL 多数馆藏在版权期内、取页 403；这本是 accessLevel=free 的样本
+
   - site_id: idp
     url: "http://idp.bbaw.de/database/oo_scroll_h.a4d?uid=5475972796;bst=1;recnum=69129;index=1;img=1"
     kind: images

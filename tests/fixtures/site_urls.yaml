@@ -56,6 +56,11 @@ sites:
       - "https://www.wul.waseda.ac.jp/kotenseki/html/bunko01/bunko01_01501/index.html"
       - "https://archive.wul.waseda.ac.jp/kosho/bunko01/bunko01_01504/"
 
+  - site_id: rsl
+    urls:
+      - "https://viewer.rsl.ru/ru/rsl01000001234"
+      - "https://viewer.rsl.ru/ru/rsl01000001234?page=5"
+
   - site_id: idp
     urls:
       - "http://idp.bbaw.de/database/oo_scroll_h.a4d?uid=5475972796;bst=1;recnum=69129;index=1;img=1"
