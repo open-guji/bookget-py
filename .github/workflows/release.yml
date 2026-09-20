@@ -65,8 +65,8 @@ jobs:
           echo "--- adapters registered ---"
           COUNT=$("$CLI" sites --list --json | python -c "import sys,json;print(len(json.load(sys.stdin)))")
           echo "adapters: $COUNT"
-          if [ "$COUNT" -lt 41 ]; then
-            echo "::error::only $COUNT adapters in the exe (expected >= 41)"
+          if [ "$COUNT" -lt 42 ]; then
+            echo "::error::only $COUNT adapters in the exe (expected >= 42)"
             exit 1
           fi
 

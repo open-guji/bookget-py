@@ -155,6 +155,12 @@ items:
     min_images: 5
     title_contains: "近衞"
 
+  - site_id: yonezawa
+    url: "https://www.library.yonezawa.yamagata.jp/dg/AA001.html"
+    kind: images
+    min_images: 400
+    title_contains: "毛詩疏"
+
   - site_id: idp
     url: "http://idp.bbaw.de/database/oo_scroll_h.a4d?uid=5475972796;bst=1;recnum=69129;index=1;img=1"
     kind: images

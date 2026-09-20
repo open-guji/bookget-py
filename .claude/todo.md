@@ -30,7 +30,9 @@
 - **NLC 其余子站**：`mylib.nlc.cn`、`ouroots.nlc.cn`、`idp.nlc.cn`
   （我们只做了 `guji.nlc.cn` 与 `read.nlc.cn`）
 
-### A2. 日本（9 → 8）
+### A2. 日本（9 → 5）
+2026-09-20 新增：庆应斯道文庫、関西大 KU-ORCAS、米沢 三站已完成；
+国立公文書館改版待反推（见 B1 表）。
 早稻田 `archive.wul.waseda.ac.jp`（旧档记为 grind，需逐页探）、
 ~~东大东文研 `shanben.ioc.u-tokyo.ac.jp`~~ **已完成 2026-09-20**（PDF-only 站，
 整册 PDF 19MB 实测通过；逐页图存在但站点不给索引，要逐页探 404，故不做）、
@@ -128,6 +130,7 @@ token 不是条目 id，只带 uid 会**静默返回另一件藏品**；上游 G
 | 站点 | 症状 | 解除条件 |
 |---|---|---|
 | `british_library` | 适配器唯一依赖的 **api.bl.uk 全球 NXDOMAIN**（Google 公网 DNS 复核），旧 `/manuscripts/Viewer.aspx` 307 跳转到通用页 | 摸清 `iiif.bl.uk` 的新路径后重做；已让报错直说原因 |
+| 国立公文書館 `www.digital.archives.go.jp` | **整站改版**：上游依赖的 `DAS/meta/listPhoto` 已 **404**。新站是 SPA，`/api/search` 可用但 `keyword` 参数被忽略（hitnum 恒为全量 429 万），`/crosssearch` 表单字段是 dbid/fond/vt，条目页（如 `/item/5576305`）是服务端渲染但**不含任何影像地址**，IIIF 常见路径全 404 | 需要一条**确有影像的条目 URL**做锚点，再反推影像接口 |
 | `hkust` | 整站迁到 `digitalcollections.hkust.edu.hk`（CollectiveAccess）。manifest 入口是 `/service.php/IIIF/manifest/ca_objects:{内部ID}`（IIIF v3，可取），但图片 `representation:{id}:{n}` **403**（info.json 却 200），带 Referer/Origin/UA 均无效；且该对象只有 Ebook/Thumb 两个 representation，非逐页图 | 需反推图片 403 的凭据，可能要登录。属整站重写 |
 
 ### 需要登录态（功能缺口，不是 bug）
