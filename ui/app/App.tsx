@@ -10,6 +10,31 @@ const useMock = new URLSearchParams(location.search).has('mock');
 const transport = useMock ? new MockTransport() : new HttpTransport('');
 
 export const App: React.FC = () => {
+  // Ask the server where it will actually write files. Showing the literal
+  // "./downloads" left users unable to find their downloads, because it
+  // resolves against the server process's working directory (for a
+  // double-clicked exe that's wherever Explorer started it).
+  const [outputDir, setOutputDir] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (useMock) {
+      setOutputDir('./downloads');
+      return;
+    }
+    let cancelled = false;
+    fetch('/api/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cfg) => {
+        if (!cancelled && cfg?.defaultOutputDir) setOutputDir(cfg.defaultOutputDir);
+      })
+      .catch(() => {
+        /* fall back below */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -37,11 +62,15 @@ export const App: React.FC = () => {
 
       {/* Main content */}
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>
-        <DownloadDashboard
-          transport={transport}
-          showUrlInput={true}
-          defaultOutputDir="./downloads"
-        />
+        {outputDir === null ? (
+          <div style={{ fontSize: 13, color: 'var(--bdm-text-dim)' }}>加载中…</div>
+        ) : (
+          <DownloadDashboard
+            transport={transport}
+            showUrlInput={true}
+            defaultOutputDir={outputDir}
+          />
+        )}
       </div>
     </div>
   );

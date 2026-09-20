@@ -106,8 +106,8 @@ export const DownloadDashboard: React.FC<DownloadDashboardProps> = ({
 
   const handleDeleteNodes = useCallback((nodeIds: string[]) => {
     if (!currentTaskId) return;
-    deleteNodes({ taskId: currentTaskId, nodeIds });
-  }, [currentTaskId, deleteNodes]);
+    deleteNodes({ taskId: currentTaskId, nodeIds, outputDir });
+  }, [currentTaskId, outputDir, deleteNodes]);
 
   // Build task list from active downloads
   const tasks: TaskCardProps[] = externalTasks ?? Object.entries(manifests)

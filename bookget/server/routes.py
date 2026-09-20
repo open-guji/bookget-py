@@ -7,6 +7,7 @@ from .sse import sse_stream
 
 def setup_routes(app: web.Application):
     app.router.add_get("/api/search", handle_search)
+    app.router.add_get("/api/config", handle_config)
     app.router.add_get("/api/sites", handle_sites)
     app.router.add_get("/api/sites/check", handle_check_url)
     app.router.add_post("/api/discover", handle_discover)
@@ -56,6 +57,24 @@ async def handle_search(request: web.Request):
         return _json(result)
     except Exception as e:
         return _err(str(e), status=500)
+
+
+async def handle_config(request: web.Request):
+    """Expose server-side defaults, notably the ABSOLUTE output directory.
+
+    The UI used to show the literal "./downloads", which resolves against the
+    server process's working directory — so users could not tell where their
+    files had actually gone (double-clicking the exe makes the CWD wherever
+    Explorer happened to start it).
+    """
+    from pathlib import Path as _Path
+
+    config = request.app["config"]
+    try:
+        output_root = str(_Path(config.storage.output_root).resolve())
+    except Exception:
+        output_root = str(config.storage.output_root)
+    return _json({"defaultOutputDir": output_root})
 
 
 async def handle_sites(request: web.Request):
@@ -157,13 +176,16 @@ async def handle_delete_nodes(request: web.Request):
     body = await _body(request)
     task_id = body.get("taskId") or body.get("task_id", "")
     node_ids = body.get("nodeIds") or body.get("node_ids", [])
+    # Accept the output dir so delete also works when the task isn't in memory
+    # (e.g. straight after 发现结构, or after the server restarted).
+    output_dir = body.get("outputDir") or body.get("output_dir") or None
     if not (task_id and node_ids):
         return _err("taskId and nodeIds are required")
     tm = request.app["task_manager"]
-    ok = await tm.delete_nodes(task_id, node_ids)
-    if ok:
-        return _json({"deleted": True})
-    return _err("task not found or no manifest", status=404)
+    result = await tm.delete_nodes(task_id, node_ids, output_dir=output_dir)
+    if result.get("deleted"):
+        return _json(result)
+    return _err(result.get("error", "task not found or no manifest"), status=404)
 
 
 async def handle_events(request: web.Request):

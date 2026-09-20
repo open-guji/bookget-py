@@ -28,6 +28,8 @@ export interface ExpandRequest {
 export interface DeleteNodesRequest {
   taskId: string;
   nodeIds: string[];
+  /** Needed so the server can find the manifest when the task isn't in memory. */
+  outputDir?: string;
 }
 
 /**

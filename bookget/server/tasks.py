@@ -1,5 +1,6 @@
 """TaskManager — wraps ResourceManager for concurrent HTTP-driven downloads."""
 import asyncio
+import json
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,6 +10,7 @@ from ..config import Config
 from ..core.resource_manager import ResourceManager
 from ..models.manifest import DownloadManifest
 from ..adapters.registry import AdapterRegistry
+from ..logger import logger
 from .sse import EventBus
 
 
@@ -116,22 +118,114 @@ class TaskManager:
             return True
         return False
 
-    async def delete_nodes(self, task_id: str, node_ids: list[str]) -> bool:
-        """Delete downloaded nodes from manifest on disk."""
+    async def delete_nodes(
+        self, task_id: str, node_ids: list[str], output_dir: str | None = None,
+    ) -> dict:
+        """Delete a node's downloaded files and reset it to PENDING.
+
+        Two things used to be wrong here:
+          * it only flipped the manifest status and **deleted no files at all**,
+            yet still answered {"deleted": true} — a plain false success;
+          * it required a live in-memory task, so deleting right after
+            「发现结构」(no download started yet) just 404'd.
+
+        Now the manifest is loaded from disk when the task isn't in memory, the
+        files listed in each node's source_data are actually removed, and the
+        caller gets the real count back.
+        """
+        from ..models.manifest import NodeStatus
+
         info = self._tasks.get(task_id)
-        if not info or not info.manifest:
-            return False
+        base_dir = Path(output_dir or (info.output_dir if info else "") or ".")
+
+        manifest = info.manifest if info else None
+        if manifest is None:
+            # Fall back to the manifest on disk so delete works after a plain
+            # discover, or after the server was restarted.
+            manifest_path = base_dir / "manifest.json"
+            if not manifest_path.is_file():
+                return {"deleted": False, "error": "manifest not found",
+                        "removed_files": 0}
+            try:
+                manifest = DownloadManifest.from_dict(
+                    json.loads(manifest_path.read_text(encoding="utf-8")))
+            except Exception as e:
+                return {"deleted": False, "error": f"cannot read manifest: {e}",
+                        "removed_files": 0}
+
         manager = ResourceManager(self.config)
+        removed = 0
+        missing_nodes: list[str] = []
         try:
+            path_map = manager._build_node_path_map(manifest.root, base_dir)
             for node_id in node_ids:
-                node = info.manifest.find_node(node_id)
-                if node:
-                    from ..models.manifest import NodeStatus
-                    node.status = NodeStatus.PENDING
-            manager._save_hierarchical_manifests(info.manifest, Path(info.output_dir))
-            return True
+                node = manifest.find_node(node_id)
+                if node is None:
+                    missing_nodes.append(node_id)
+                    continue
+                # Deleting a parent must also clear everything beneath it,
+                # otherwise a volume's pages survive while it claims PENDING.
+                for target in self._walk_nodes(node):
+                    target_dir, _ = path_map.get(target.id, (base_dir, None))
+                    removed += self._remove_node_files(target, Path(target_dir))
+                    # DISCOVERED, not PENDING: get_downloadable_nodes() only
+                    # picks up {DISCOVERED, FAILED, DOWNLOADING}, so resetting
+                    # to PENDING ("children not yet expanded") left the node
+                    # permanently un-redownloadable — the UI would report
+                    # "0 downloadable" forever after a delete.
+                    target.status = NodeStatus.DISCOVERED
+                    target.downloaded_items = 0
+
+            manager._save_hierarchical_manifests(manifest, base_dir)
+            if info is not None:
+                info.manifest = manifest
+            # Tell the UI so the tree repaints without a manual re-discover.
+            self.bus.publish("manifest_updated", {
+                "taskId": task_id,
+                "manifest": manifest.to_dict(),
+            })
+            return {
+                "deleted": True,
+                "removed_files": removed,
+                "missing_nodes": missing_nodes,
+            }
         finally:
             await manager.close()
+
+    @staticmethod
+    def _walk_nodes(node):
+        """Yield `node` and every descendant, deepest first."""
+        for child in (getattr(node, "children", None) or []):
+            yield from TaskManager._walk_nodes(child)
+        yield node
+
+    @staticmethod
+    def _remove_node_files(node, node_dir: Path) -> int:
+        """Delete the files a node produced. Returns how many were removed."""
+        removed = 0
+        source = getattr(node, "source_data", None) or {}
+        names = [
+            item.get("filename")
+            for item in (source.get("images") or [])
+            if isinstance(item, dict) and item.get("filename")
+        ]
+        for name in names:
+            target = node_dir / name
+            try:
+                if target.is_file():
+                    target.unlink()
+                    removed += 1
+            except OSError as e:
+                logger.warning(f"could not delete {target}: {e}")
+
+        # Non-leaf nodes own a directory; drop it once it's empty.
+        try:
+            if (node_dir.is_dir() and node_dir.name
+                    and not any(node_dir.iterdir())):
+                node_dir.rmdir()
+        except OSError:
+            pass
+        return removed
 
     def get_task(self, task_id: str) -> TaskInfo | None:
         return self._tasks.get(task_id)
