@@ -4,6 +4,7 @@ import re
 
 from ..iiif.base_iiif import BaseIIIFAdapter
 from ..registry import AdapterRegistry
+from ...exceptions import MetadataExtractionError
 
 
 @AdapterRegistry.register
@@ -76,6 +77,26 @@ class BritishLibraryAdapter(BaseIIIFAdapter):
     def get_manifest_url(self, book_id: str) -> str:
         # BL IIIF manifests are at different locations depending on collection
         return f"https://api.bl.uk/metadata/iiif/{book_id}/manifest.json"
+
+    async def get_iiif_manifest(self, book_id: str):
+        """Fetch the manifest, or explain why this adapter cannot work.
+
+        api.bl.uk — the only host this adapter talks to — no longer exists:
+        it is NXDOMAIN at Google's public resolver as well as here (checked
+        2026-09-20), and the old /manuscripts/Viewer.aspx entry point now
+        307s to a generic collection page. Without that, every request fails
+        as a bare DNS error, which reads like a local network problem.
+        """
+        try:
+            return await super().get_iiif_manifest(book_id)
+        except MetadataExtractionError as e:
+            raise MetadataExtractionError(
+                f"[{self.site_id}] 大英图书馆的 IIIF 接口主机 api.bl.uk 已下线"
+                f"（DNS 全球 NXDOMAIN，2026-09-20 核实），旧的 "
+                f"/manuscripts/Viewer.aspx 阅览器也已跳转到通用页面。\n"
+                f"该适配器目前不可用，需按 BL 重建后的新接口重做。\n"
+                f"原始错误：{e}"
+            ) from e
 
 
 @AdapterRegistry.register

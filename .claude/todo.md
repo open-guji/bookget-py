@@ -74,13 +74,35 @@
       **返回 403**（info.json 却是 200），带 Referer/Origin/UA 均无效，还缺别的凭据。
       且该对象的 manifest 只有 Ebook/Thumb 两个 representation，**不是逐页图**。
       → 这是**整站重写 + 认证反推**，不是改模板，需单独立项
-- [ ] **16 个适配器从未做过 live 验证**（`live_urls.yaml` 已登记 21/37，
-      2026-09-20 补进 archive_org）：
-      berkeley（WAF 全拦，见上）、bnf_gallica、british_library、generic_iiif、
-      hanchi、harvard、hku、kyoto_rmda、ncl_rbook、nlc_guji、nlc_read、
-      npm_taipei、princeton、shidianguji、stanford、wikimedia_commons。
-      **发布前应逐个拿真实 URL 跑通**——本轮抽查 10 个就有 1 个真 bug
-      （Berkeley）、1 个 0 图（archive_org 需确认取图逻辑）。
+- [~] **live 验证补齐进度**（`live_urls.yaml` 从 20 → **25** 条，2026-09-20）
+
+      **已验证通过并登记（5 个）**：
+      archive_org（修 bug 后 173 图）、wikimedia_commons（197 图）、
+      princeton（修 bug 后 39 图）、kyoto_rmda（論語 94 图）、
+      generic_iiif（e-codices 203 图，用没有专属适配器的域验兜底路径）
+
+      **查实为「站点已死」（2 个，需重做，非本机问题）**：
+      - `british_library`：适配器唯一依赖的主机 **api.bl.uk 全球 NXDOMAIN**
+        （Google 公网 DNS 复核），旧 `/manuscripts/Viewer.aspx` 也已 307 跳走。
+        已让报错直说原因。BL 重建后的新接口在 `iiif.bl.uk`，路径待摸
+      - `hkust`：见上，整站迁到 CollectiveAccess
+
+      **本沙箱 IP 被拦，验不了（6 个，需本人在家用网络验）**：
+      berkeley（AWS WAF 挑战）、harvard（持续 429，非偶发）、
+      stanford（检索站 searchworks 被 **F5 Shape** 拦，captcha；
+      但 manifest 主机 purl.stanford.edu 可达，**只缺一个真 druid**）、
+      bnf_gallica（500/403/000 三种都撞到，基本是封 IP）、
+      hku（IIIF 主机可达但 fixture 里的 id 返回空 manifest，
+      catalog 主机连接被丢——**todo 旧记的「站点疑下线」已过时**）、
+      npm_taipei（首页 200，但 `/api/Painting/*`、`/Antique/setJsonU`
+      所有数据接口一律 500，带 cookie/referer 也一样）
+
+      **按设计不进 live（5 个）**：hanchi、nlc_guji、nlc_read、ncl_rbook、
+      shidianguji——登录态/滑块/IP 限制/Playwright，由各自专属测试覆盖
+
+      > **需要你提供真实 item URL 的**：stanford（一个 druid）、npm_taipei、
+      > hku。按本档旧教训，SPA 站从沙箱翻列表找 item 走不通，
+      > 最快路径就是直接给一条真实链接。
 - [x] **archive_org 返回 0 图 = 真 bug，已修**（2026-09-20）：代码假定每个 item 都有
       `{identifier}_tif.zip` 和 imagecount，而 IA 现在多数扫描本只发 `_jp2.zip`、
       派生名还常常不等于 identifier（`in.ernet.dli.2015.282` 的栈叫

@@ -117,6 +117,18 @@ items:
     # Title field uses shinjitai (総葉概録). Skip title_contains to avoid the
     # variant mismatch — non-empty title is still asserted.
 
+  - site_id: generic_iiif
+    url: "https://www.e-codices.unifr.ch/metadata/iiif/csg-0018/manifest.json"
+    kind: images
+    min_images: 150
+    # e-codices 没有专属适配器，正好用来验通用 IIIF 兜底路径
+
+  - site_id: kyoto_rmda
+    url: "https://rmda.kulib.kyoto-u.ac.jp/item/rb00013000"
+    kind: images
+    min_images: 80
+    title_contains: "論語"
+
   - site_id: princeton
     url: "https://dpul.princeton.edu/eastasian/catalog/563061ad856c222cb3228b2804dd3922"
     kind: images
