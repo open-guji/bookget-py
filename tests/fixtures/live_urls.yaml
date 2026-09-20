@@ -117,7 +117,19 @@ items:
     # Title field uses shinjitai (総葉概録). Skip title_contains to avoid the
     # variant mismatch — non-empty title is still asserted.
 
+  - site_id: princeton
+    url: "https://dpul.princeton.edu/eastasian/catalog/563061ad856c222cb3228b2804dd3922"
+    kind: images
+    min_images: 30
+    title_contains: "西北文献"
+
   # --- Non-IIIF image sites ---
+  - site_id: wikimedia_commons
+    url: "https://commons.wikimedia.org/wiki/File:CADAL06210208_%E5%9B%9B%E5%BA%AB%E6%9B%B8%E7%9B%AE%EF%BC%9A%E5%9B%9B.djvu"
+    kind: images
+    min_images: 150
+    title_contains: "四庫書目"
+
   - site_id: archive_org
     url: "https://archive.org/details/06064237.cn"
     kind: images
