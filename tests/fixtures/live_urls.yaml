@@ -143,6 +143,18 @@ items:
     title_contains: "十三經註疏"
     # PDF-only 站：按本仓惯例（同 nlc_read），PDF 也从 get_image_list 返回
 
+  - site_id: keio_sido
+    url: "https://db2.sido.keio.ac.jp/kanseki/bib_frame?id=006754"
+    kind: images
+    min_images: 60
+    title_contains: "三國志"
+
+  - site_id: kansai_orcas
+    url: "https://www.iiif.ku-orcas.kansai-u.ac.jp/books/002721015"
+    kind: images
+    min_images: 5
+    title_contains: "近衞"
+
   - site_id: idp
     url: "http://idp.bbaw.de/database/oo_scroll_h.a4d?uid=5475972796;bst=1;recnum=69129;index=1;img=1"
     kind: images

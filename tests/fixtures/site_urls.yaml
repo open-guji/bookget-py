@@ -30,6 +30,17 @@ sites:
       - "https://shanben.ioc.u-tokyo.ac.jp/main_p.php?nu=A000600&order=rn_no&no=00015&tim=hb"
       - "https://shanben.ioc.u-tokyo.ac.jp/main_p.php?nu=A000500"
 
+  - site_id: keio_sido
+    urls:
+      - "https://db2.sido.keio.ac.jp/kanseki/bib_frame?id=006754"
+      - "https://db2.sido.keio.ac.jp/kanseki/bib_image?id=006755"
+      - "https://db2.sido.keio.ac.jp/iiif/manifests/kanseki/006755/006755-001/manifest.json"
+
+  - site_id: kansai_orcas
+    urls:
+      - "https://www.iiif.ku-orcas.kansai-u.ac.jp/books/002720833"
+      - "https://www.iiif.ku-orcas.kansai-u.ac.jp/iiif/books/002720833/manifest.json"
+
   - site_id: idp
     urls:
       - "http://idp.bbaw.de/database/oo_scroll_h.a4d?uid=5475972796;bst=1;recnum=69129;index=1;img=1"
