@@ -34,7 +34,7 @@
 | 网站 | 域名 | 图片 | PDF | 文字 | 搜索 |
 |------|------|:----:|:---:|:----:|:----:|
 | 臺灣國家圖書館 (NCL Taiwan, rbook.ncl.edu.tw) | `rbook.ncl.edu.tw` | ✓ |  |  |  |
-| 臺灣故宮博物院 (NPM Taipei) | `digitalarchive.npm.gov.tw` | ✓ |  |  |  |
+| 臺灣故宮博物院 Open Data (NPM Taipei) | `digitalarchive.npm.gov.tw` | ✓ | ✓ |  | ✓ |
 | 漢籍全文資料庫 (Hanchi) | `hanchi.ihp.sinica.edu.tw` |  |  | ✓ |  |
 | 臺灣華文電子書庫 | `taiwanebook.ncl.edu.tw` | ✓ | ✓ |  |  |
 | 香港大学数字图书馆 (HKU) | `digitalrepository.lib.hku.hk` | ✓ |  |  |  |
@@ -159,7 +159,16 @@ bookget download "URL" -o ./output --no-text
 
 # 只下载文字
 bookget download "URL" -o ./output --no-images
+
+# 下载后合成归档 PDF（图片原样嵌入 + 元数据/书签/附件/资料表），或对已下载目录执行 bookget pdf
+bookget download "URL" -o ./output --pdf
+bookget pdf ./output/P1528 --engine latex        # LuaLaTeX 排版资料表（需 TeX Live）
+
+# 故宫 Open Data：整冊/整卷（所有开页记录）作为一件作品下载
+bookget download "https://digitalarchive.npm.gov.tw/opendata/Pub/Detail?id=16797&dep=P" -o ./npm --album --pdf
 ```
+
+归档 PDF 的完整用法（安装 TeX Live、整类批量、文件命名、校验、上传维基共享资源前的注意事项）见 [doc/ARCHIVAL_PDF.md](doc/ARCHIVAL_PDF.md)。
 
 #### 批量下载
 

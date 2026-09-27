@@ -24,6 +24,13 @@ a = Analysis(
         # core
         'bookget.core',
         'bookget.models',
+        'bookget.pdf',
+        'bookget.pdf.writer',
+        'bookget.pdf.sheet',
+        'bookget.pdf.build',
+        'bookget.pdf.schema',
+        'bookget.pdf.latex',
+        'bookget.pdf.verify',
         'bookget.text_parsers',
         'bookget.text_converters',
         'bookget.ia_upload',

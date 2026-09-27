@@ -165,8 +165,11 @@ sites:
 
   - site_id: npm_taipei
     urls:
-      - "https://digitalarchive.npm.gov.tw/Painting/Content?pid=12345"
-      - "https://digitalarchive.npm.gov.tw/Painting/Content?type=1&pid=67890"
+      - "https://digitalarchive.npm.gov.tw/opendata/Pub/Detail?id=1528&dep=P&mode=full"
+      - "https://digitalarchive.npm.gov.tw/opendata/Pub/Detail/1528?dep=P"
+      - "https://digitalarchive.npm.gov.tw/opendata/Pub/DetailEng/40?dep=P"
+      - "https://digitalarchive.npm.gov.tw/opendata/Collection/Detail?id=11&dep=U"
+      - "https://digitalarchive.npm.gov.tw/opendata/IIIFViewer?id=1528&dep=P&imageName="
 
   - site_id: tnm
     urls:

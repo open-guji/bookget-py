@@ -25,6 +25,7 @@
 |[深圳市古籍数字图书馆](websites/深圳市古籍数字图书馆.md) [🔗](https://yun.szlib.org.cn/stgj2021/) |深圳图书馆建设的古籍数字化平台，提供馆藏古籍在线阅览 | 待确认 | bookget |
 |[洛阳市图书馆](websites/洛阳市图书馆.md) [🔗](http://111.7.82.29:8090/index.php) |洛阳市图书馆自建的馆藏珍贵古籍全文数据库，提供古籍PDF在线阅读 | 未明确标注 | bookget |
 |[温州市图书馆（瓯越记忆）](websites/温州市图书馆.md) [🔗](https://oyjy.wzlib.cn/pdf/) |"瓯越记忆"平台，提供温州地方古籍在线阅读与PDF下载 | 未明确标注 | PDF下载 |
+|[國立故宮博物院 Open Data](websites/臺灣故宮博物院 Open Data.md) [🔗](https://digitalarchive.npm.gov.tw/opendata/) |臺灣故宮典藏書畫約3.9萬筆、器物約7萬筆的中英文資料與原始解析度影像（法書、法帖、拓片、繪畫等） | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.zh_TW) | IIIF / bookget |
 |[臺灣華文電子書庫](websites/臺灣華文電子書庫.md) [🔗](https://taiwanebook.ncl.edu.tw/zh-tw) |臺灣國家圖書館建設的1911-1949年間出版書籍數位化平台 | 免費開放閱覽 | bookget |
 |[臺灣中央研究院歷史語言研究所](websites/臺灣中央研究院歷史語言研究所.md) [🔗](https://hanchi.ihp.sinica.edu.tw/) |中研院史语所建设的漢籍全文資料庫，收录1,573种典籍约8.7亿字，提供经过校勘的全文文字 | 免费版/授权版 | 手动下载 |
 |[中华寻根网](websites/中华寻根网.md) [🔗](http://ouroots.nlc.cn/) |国家图书馆与澳门基金会合作建设的中华族谱服务平台 | 免费开放浏览 | bookget |

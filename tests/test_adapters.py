@@ -699,18 +699,18 @@ class TestPalaceMuseumTaipeiAdapter:
 
         adapter = PalaceMuseumTaipeiAdapter()
         book_id = adapter.extract_book_id(
-            "https://digitalarchive.npm.gov.tw/Painting/Content?pid=12345"
+            "https://digitalarchive.npm.gov.tw/opendata/Pub/Detail?id=12345&dep=P&mode=full"
         )
-        assert book_id == "12345"
+        assert book_id == "P12345"
 
     def test_extract_book_id_multiple_params(self):
         from bookget.adapters.other.taiwan import PalaceMuseumTaipeiAdapter
 
         adapter = PalaceMuseumTaipeiAdapter()
         book_id = adapter.extract_book_id(
-            "https://digitalarchive.npm.gov.tw/Painting/Content?type=1&pid=67890"
+            "https://digitalarchive.npm.gov.tw/opendata/Collection/Detail?mode=full&id=67890&dep=U"
         )
-        assert book_id == "67890"
+        assert book_id == "U67890"
 
     def test_extract_book_id_invalid(self):
         from bookget.adapters.other.taiwan import PalaceMuseumTaipeiAdapter

@@ -238,6 +238,10 @@ async def _download_one(args, config: Config, url: str,
         else:
             callback = None
 
+        adapter_options = {}
+        if getattr(args, "album", False):
+            adapter_options["album_mode"] = True
+
         task = await manager.download(
             url=url,
             output_dir=output,
@@ -245,7 +249,8 @@ async def _download_one(args, config: Config, url: str,
             include_text=not args.no_text,
             include_metadata=not args.no_metadata,
             index_id=args.index_id if hasattr(args, 'index_id') else "",
-            progress_callback=callback
+            progress_callback=callback,
+            adapter_options=adapter_options,
         )
 
         if not args.json_progress and not args.quiet:
@@ -255,6 +260,16 @@ async def _download_one(args, config: Config, url: str,
             logger.info(f"Title: {task.metadata.title}")
         logger.info(f"Downloaded: {task.downloaded_count}/{task.total_resources}")
         logger.info(f"Output: {task.output_dir}")
+
+        if getattr(args, "pdf", False) and task.downloaded_count:
+            if task.failed_count:
+                logger.warning(f"{task.failed_count} images failed; PDF not built (re-run to resume, then `bookget pdf`)")
+            else:
+                from bookget.pdf import build_book_pdf
+                pdf_path = build_book_pdf(
+                    task.output_dir, engine=getattr(args, "pdf_engine", "native"),
+                    sheet=not getattr(args, "no_sheet", False), verify=not getattr(args, "no_verify", False))
+                logger.info(f"PDF: {pdf_path}")
 
         if args.json:
             result = {
@@ -269,6 +284,41 @@ async def _download_one(args, config: Config, url: str,
 
     finally:
         await manager.close()
+
+
+def cmd_pdf(args) -> int:
+    """Handle pdf command: assemble downloaded book dir(s) into archival PDFs."""
+    from bookget.pdf import build_book_pdf
+
+    dirs = []
+    for d in args.book_dir:
+        d = Path(d)
+        if (d / "images").is_dir():
+            dirs.append(d)
+        elif d.is_dir():           # a batch directory: every child with images/
+            dirs.extend(sorted(c for c in d.iterdir() if (c / "images").is_dir()))
+        else:
+            logger.error(f"Not a directory: {d}")
+    if not dirs:
+        logger.error("No book directories with images/ found")
+        return 2
+    if args.output and len(dirs) > 1:
+        logger.error("--output names a single file; omit it when building several books")
+        return 2
+
+    failed = 0
+    for d in dirs:
+        try:
+            out = build_book_pdf(
+                d, args.output, engine=args.engine, sheet=not args.no_sheet, reverse=args.reverse,
+                dpi=args.dpi, name_prefix=args.name_prefix, font_path=args.font,
+                verify=not args.no_verify, keep_build=args.keep_build,
+            )
+            print(out)
+        except Exception as e:
+            failed += 1
+            logger.error(f"{d}: {e}")
+    return 1 if failed else 0
 
 
 async def cmd_metadata(args, config: Config):
@@ -894,8 +944,39 @@ def main():
                             help="Use manifest-based incremental download")
     p_download.add_argument("--section", type=str, action="append", default=None,
                             help="Download specific sections/nodes by ID (repeat for multiple)")
+    p_download.add_argument("--pdf", action="store_true",
+                            help="After downloading, assemble images/ into pdf/<name>.pdf (see `bookget pdf`)")
+    p_download.add_argument("--no-sheet", action="store_true",
+                            help="With --pdf: omit the metadata sheet pages (native engine)")
+    p_download.add_argument("--pdf-engine", choices=["native", "latex"], default="native",
+                            help="With --pdf: PDF engine (latex = LuaLaTeX typeset form, needs TeX Live)")
+    p_download.add_argument("--no-verify", action="store_true",
+                            help="With --pdf: skip the PyMuPDF verification of the result")
+    p_download.add_argument("--album", action="store_true",
+                            help="Download the whole work (album/scroll) the record belongs to — every sibling "
+                                 "record's images and metadata (sites that support it, e.g. NPM Open Data)")
     p_download.add_argument("--concurrency", type=int, default=1,
                             help="Number of nodes to download in parallel (default 1)")
+
+    # pdf command
+    p_pdf = subparsers.add_parser(
+        "pdf",
+        help="Assemble a downloaded book (images/ + metadata.json) into an archival PDF",
+        description="JPEG pages are embedded without re-encoding; the PDF carries Info/XMP "
+                    "metadata, bookmarks, page labels, the JSON files as attachments and, "
+                    "when a CJK font is available, a metadata sheet at the end.")
+    p_pdf.add_argument("book_dir", nargs="+", help="Book directory (or a batch directory of book directories)")
+    p_pdf.add_argument("-o", "--output", help="Output PDF path (single book only); default pdf/<name>.pdf inside the book dir")
+    p_pdf.add_argument("--engine", choices=["native", "latex"], default="native",
+                       help="native: pure Python (default); latex: LuaLaTeX typeset form (needs TeX Live + CJK font)")
+    p_pdf.add_argument("--no-sheet", action="store_true", help="Omit the metadata sheet pages (native engine)")
+    p_pdf.add_argument("--no-verify", action="store_true", help="Skip the PyMuPDF verification of the result")
+    p_pdf.add_argument("--keep-build", action="store_true", help="latex: keep the build/ directory (doc.tex, doc.log)")
+    p_pdf.add_argument("--reverse", action="store_true", help="Reverse the page order")
+    p_pdf.add_argument("--dpi", type=float, default=300.0, help="Assumed resolution for page size (default 300)")
+    p_pdf.add_argument("--name-prefix", type=str, default=None,
+                       help="File name prefix, e.g. NPM (default: NPM for npm_taipei, else the site id)")
+    p_pdf.add_argument("--font", type=str, default=None, help="CJK font file for the sheet (or $BOOKGET_CJK_FONT)")
 
     # discover command
     p_discover = subparsers.add_parser("discover", help="Discover book structure (Phase 1)")
@@ -1019,6 +1100,8 @@ def main():
             asyncio.run(cmd_search(args, config))
         elif args.command == "selftest":
             sys.exit(cmd_selftest(args))
+        elif args.command == "pdf":
+            sys.exit(cmd_pdf(args))
         elif args.command == "sites":
             cmd_sites(args)
         elif args.command == "upload":

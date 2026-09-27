@@ -31,6 +31,8 @@ class BaseSiteAdapter(ABC):
     supports_images: bool = True
     supports_pdf: bool = False
     supports_search: bool = False
+    # Write raw_metadata to raw.<site_id>.json beside metadata.json on download
+    persist_raw_metadata: bool = False
 
     # HTTP configuration
     default_headers: Dict[str, str] = {}

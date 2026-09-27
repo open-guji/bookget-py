@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>故宮典藏資料檢索-Opendata開放資料</title>
+    <!-- Favicon -->
+    <link rel="shortcut icon" href="/opendata/Content/images/favicon.ico" />
+    <!-- Baice -->
+    <script src="/opendata/bundles/jquery?v=N2YlHnRI7it2_JoqUZTYWxPtx-s61zIGkk78Q0eabPM1"></script>
+
+    <script src="/opendata/bundles/bootstrap?v=BkxlANSUkQErsU2cUtLEhgg-C0aVQKY33-6RPdrb4ok1"></script>
+
+    <link href="/opendata/stlye/css?v=qaYWSOyZOo4ObpX0rvH1xoiMz_IBW1tuoYiAXkowZqo1" rel="stylesheet"/>
+
+
+    <!-- Style -->
+    <script type="text/javascript" src="/opendata/Scripts/basic/master.js?v=2025012313"></script>
+    <link rel="stylesheet" href="/opendata/Content/css/opendata.css?v=2025012313" />
+
+    <!--GA4-->
+    
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-JY17M0QTGP"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-9GKT9XGFDZ');
+</script>
+
+
+    <meta name='description' content='故宮典藏資料檢索系統-Opendata開放資料'>
+    <meta property='og:title' content='故宮典藏資料檢索系統'>
+    <meta property='og:description' content='Opendata開放資料'>
+    <meta property='og:image' content='https://digitalarchive.npm.gov.tw/opendata/Content/images/OpenData_share.jpg'>
+</head>
+
+<body>
+    <div class="loading" style="display: none">
+        <div class="loader-inner ball-pulse-sync">
+            <span class="mr-10">Loading</span>
+            <div></div>
+            <div></div>
+            <div></div>
+        </div>
+    </div>
+    <!-- ↓ 主體 ↓ -->
+    <div id="wrapper">
+        <!-- 無障礙導覽按鈕 -->
+        <div class="fastFocus">
+            <a href="#C" class="fastFocus" tabindex="1" title="移到主要內容區塊">跳到主要內容區塊</a>
+            <script>
+                var $a = $(".fastFocus a");
+                $a.on("click", function (evt) {
+                    var $href = $($(this).attr("href")),
+                        $target = $href.find("a").eq(0).get(0);
+                    setTimeout(function () {
+                        try {
+                            $target.focus();
+                        } catch (e) { }
+                    }, 0);
+                });</script>
+        </div>
+        <!-- ↓ 選單區 ↓ -->
+        <header id="header">
+            <!-- LOGO -->
+            <h1 id="logo">
+                <a href="/opendata/" title="Opendata開放資料：回首頁">
+                    <img src="/opendata/Content/images/LOGO3.png" alt="回首頁" />
+                </a>
+            </h1>
+            <!-- 行動裝置選單按鈕 -->
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="material-icons-outlined"> </span>
+            </button>
+            <!-- 主選單 -->
+            <nav class="navbar-collapse collapse" id="navbarCollapse">
+                <a href="#U" id="U" name="U" accesskey="U" class="accesskey" title="上方選單區塊，此區塊呈現功能選單連結">:::</a>
+                <ul class="nav">
+                    <li class="nav-item">
+                        <a href="/opendata/" class="nav-link active" title="移至Opendata開放資料[中文版]">
+                            <span>中文</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="/opendata/Pub/EngVersion" class="nav-link" title="English version">
+                            <span>English</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </header>
+        <!-- 路徑 -->
+        <div class="breadcrumb-body">
+            <div class="title"><span>Opendata開放資料</span></div>
+            <nav aria-label="breadcrumb">
+                <a href="#C" id="C" name="C" accesskey="C" class="accesskey" title="中央內容區塊，此區塊呈現各網頁的資訊內容">:::</a>
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/opendata/" title="Opendata開放資料">Opendata開放資料</a></li>
+                </ol>
+            </nav>
+        </div>
+        <!-- ↓ 內容區 ↓ -->
+        
+
+
+<main id="main" class="font-resize">
+    <div class="opendata">
+        <div class="opendata-row">
+            <label for="rblYear" class="L">朝代</label>
+            <div id="rblYear" class="R">
+
+                <div class="filter-checkbox">
+                        <input id="rblYear_0" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="" checked="checked" />
+                    <label for="rblYear_0">全部</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_1" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="-7000~-2000~新石器時代" />
+                    <label for="rblYear_1">新石器時代</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_2" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="-2600~-2000~新石器時代晚期" />
+                    <label for="rblYear_2">新石器時代晚期</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_3" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="-1600~-1046~商" />
+                    <label for="rblYear_3">商</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_4" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="-1100~-800~西周" />
+                    <label for="rblYear_4">西周</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_5" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="-800~-500~春秋" />
+                    <label for="rblYear_5">春秋</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_6" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="-500~-300~戰國" />
+                    <label for="rblYear_6">戰國</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_7" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="-221~-207~秦" />
+                    <label for="rblYear_7">秦</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_8" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="-206~8~西漢" />
+                    <label for="rblYear_8">西漢</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_9" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="9~23~新莽" />
+                    <label for="rblYear_9">新莽</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_10" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="25~220~東漢" />
+                    <label for="rblYear_10">東漢</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_11" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="220~589~魏晉南北朝" />
+                    <label for="rblYear_11">魏晉南北朝</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_12" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="581~618~隋" />
+                    <label for="rblYear_12">隋</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_13" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="618~907~唐" />
+                    <label for="rblYear_13">唐</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_14" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="907~960~五代" />
+                    <label for="rblYear_14">五代</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_15" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="907~1125~遼" />
+                    <label for="rblYear_15">遼</label>
+                </div>
+
+                <div class="filter-checkbox">
+                        <input id="rblYear_16" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="960~1279~宋" />
+                <label for="rblYear_16">宋</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_17" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="1115~1234~金" />
+                    <label for="rblYear_17">金</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_18" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="1271~1368~元" />
+                    <label for="rblYear_18">元</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_19" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="1368~1644~明" />
+                    <label for="rblYear_19">明</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_20" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="1644~1911~清" />
+                    <label for="rblYear_20">清</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_21" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="1911~9999~民國" />
+                    <label for="rblYear_21">民國</label>
+                </div>
+                <div class="filter-checkbox">
+                        <input id="rblYear_22" type="radio" name="rblYear" onclick="InitCategoryRadio(this.value)" value="0~0~時代不詳" />
+                    <label for="rblYear_22">時代不詳</label>
+                </div>
+            </div>
+        </div>
+        <div class="opendata-row">
+            <label for="rblType" class="L">分類</label>
+            <div id="rblType" class="R">
+                <div class="filter-checkbox">
+                        <input id="rblType_0" type="radio" name="rblType" value="" checked="checked" />
+                    <label for="rblType_0">全部</label>
+                </div>
+
+                    <div class="filter-checkbox">
+                            <input id="rblType_1" type="radio" name="rblType" value="銅器" />
+                        <label for="rblType_1"><span>銅器</span><span>(6236)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_2" type="radio" name="rblType" value="陶瓷器" />
+                        <label for="rblType_2"><span>陶瓷器</span><span>(24201)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_3" type="radio" name="rblType" value="玉器" />
+                        <label for="rblType_3"><span>玉器</span><span>(12327)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_4" type="radio" name="rblType" value="琺瑯器" />
+                        <label for="rblType_4"><span>琺瑯器</span><span>(2521)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_5" type="radio" name="rblType" value="雕刻" />
+                        <label for="rblType_5"><span>雕刻</span><span>(667)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_6" type="radio" name="rblType" value="漆器" />
+                        <label for="rblType_6"><span>漆器</span><span>(762)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_7" type="radio" name="rblType" value="錢幣" />
+                        <label for="rblType_7"><span>錢幣</span><span>(6953)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_8" type="radio" name="rblType" value="文具" />
+                        <label for="rblType_8"><span>文具</span><span>(2385)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_9" type="radio" name="rblType" value="雜項" />
+                        <label for="rblType_9"><span>雜項</span><span>(11974)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_10" type="radio" name="rblType" value="織品" />
+                        <label for="rblType_10"><span>織品</span><span>(1612)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_11" type="radio" name="rblType" value="絲繡" />
+                        <label for="rblType_11"><span>絲繡</span><span>(438)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_12" type="radio" name="rblType" value="繪畫" />
+                        <label for="rblType_12"><span>繪畫</span><span>(16697)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_13" type="radio" name="rblType" value="法書" />
+                        <label for="rblType_13"><span>法書</span><span>(5763)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_14" type="radio" name="rblType" value="法帖" />
+                        <label for="rblType_14"><span>法帖</span><span>(7147)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_15" type="radio" name="rblType" value="拓片" />
+                        <label for="rblType_15"><span>拓片</span><span>(1214)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_16" type="radio" name="rblType" value="成扇" />
+                        <label for="rblType_16"><span>成扇</span><span>(2545)</span></label>
+                    </div>
+                    <div class="filter-checkbox">
+                            <input id="rblType_17" type="radio" name="rblType" value="其他" />
+                        <label for="rblType_17"><span>其他</span><span>(5228)</span></label>
+                    </div>
+            </div>
+        </div>
+        <div class="opendata-row">
+            <label for="txtQuery" class="L">關鍵字</label>
+            <div class="R">
+                <input name="txtQuery" type="text" id="txtQuery" accesskey="S" placeholder="請輸入關鍵字" class="form-control form-3 form-lg-12" />
+            </div>
+        </div>
+        <div class="opendata-bottom">
+            <input type="submit" name="ibsubmit" value="查詢" id="ibsubmit" title="查詢" class="btn btn-project" alternatetext="查詢" onclick="ClickSearch()" />
+            <input type="submit" name="ibsubmit" value="清除" id="ibsubmit" title="清除" class="btn btn-default" alternatetext="清除" onclick="CleanAll()" />
+        </div>
+    </div>
+    
+    <div id="searchResult">
+        <div class="search-condition" id="conditonTag">
+        </div>
+            <div id="result">
+                <div class="card-mode-content">
+                    <div class="result-card">
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16764', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481488&randomCode=47801737731" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之相過帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16764?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16771', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481489&randomCode=74193867542" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之諸舍帖永嘉帖鵝還帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16771?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16772', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481490&randomCode=33510137343" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之諸女帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16772?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16773', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481491&randomCode=88566033220" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之授衣帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16773?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16778', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481492&randomCode=69797438495" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之奉別帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16778?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16779', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481492&randomCode=69797438495" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之想彼帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16779?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16780', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481493&randomCode=29472091920" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之承姑帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16780?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16782', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481493&randomCode=29472091920" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之餘杭帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16782?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16783', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481494&randomCode=92136746537" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之節過帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16783?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16784', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481494&randomCode=92136746537" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之願餘帖適奉帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16784?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16786', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481495&randomCode=87933408428" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之歲盡帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16786?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16787', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481495&randomCode=87933408428" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之衛軍帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16787?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16789', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481496&randomCode=35348153782" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之靜息帖姊性纏綿帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16789?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16791', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481497&randomCode=70176955435" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之不謂帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16791?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16792', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481497&randomCode=70176955435" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之阮新婦帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16792?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16793', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481498&randomCode=35669473113" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之奉對帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16793?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16794', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481498&randomCode=35669473113" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之夏日帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16794?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16795', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481498&randomCode=35669473113" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之思戀帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16795?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16796', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481499&randomCode=81362261263" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之天寶帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16796?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16797', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481500&randomCode=45301089974" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之吳興帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16797?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16798', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481500&randomCode=45301089974" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之廿九日帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16798?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16799', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481500&randomCode=45301089974" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之腎氣丸帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16799?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16800', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481501&randomCode=51882834072" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之先夜帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16800?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16802', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481502&randomCode=71156359468" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之玄度帖慕容帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16802?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16804', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481502&randomCode=71156359468" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之薄冷帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16804?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16805', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481502&randomCode=71156359468" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之益部帖餳大佳帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16805?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16806', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481503&randomCode=46516904471" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之告先帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16806?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16807', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481503&randomCode=46516904471" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之澗松帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16807?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16809', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481504&randomCode=70322306613" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之仲宗帖黃門帖外甥帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16809?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16810', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481504&randomCode=70322306613" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之冠軍帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16810?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                            <div class="card-item">
+                                <a href="" onclick="Detail('16812', 'P')" class="card">
+                                    <div class="card-img">
+                                        <img src="/opendata/Image/GetImage?imageId=481504&randomCode=70322306613" alt="" />
+                                    </div>
+                                    <div class="card-title">宋榻大觀帖（九）　冊　晉王獻之可必不帖諸舍帖</div>
+                                </a>
+                                <a href="/opendata/Pub/Detail/16812?dep=P&amp;mode=full" target="_blank" rel="noopener noreferrer" class="openblank">
+                                    <span class="material-icons-outlined"> open_in_new </span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                <nav class="page">
+                    <div class="page-size">
+                        <div class="page-text">
+                            <span>共</span>
+                            <span>31</span>
+                            <span>筆</span>
+                        </div>
+                        <select class="form-control" data-val="true" data-val-number="欄位 PageSize 必須是數字。" data-val-required="PageSize 欄位是必要項。" id="collection-per-page" name="PageInfo.PageSize" onchange="ChangePageSize(this)" title="筆數"><option value="15">每頁15筆</option>
+<option value="30">每頁30筆</option>
+</select>
+                    </div>
+                    <ul class="pagination">
+                        <li class="page-item">
+                            <a href="#" onclick="ChangePageIndex(1)" class="page-link" data-bs-toggle-second="tooltip" data-bs-placement="top" title="最前頁">
+                                <span class="material-icons-outlined">first_page</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a href="#" onclick="ChangePageIndex(1)" class="page-link" data-bs-toggle-second="tooltip" data-bs-placement="top" title="上一頁">
+                                <span class="material-icons-outlined">navigate_before</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a href="#" onclick="ChangePageIndex(1)" class="page-link" data-bs-toggle-second="tooltip" data-bs-placement="top" title="下一頁">
+                                <span class="material-icons-outlined">navigate_next</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a href="#" onclick="ChangePageIndex(1)" class="page-link" data-bs-toggle-second="tooltip" data-bs-placement="top" title="最末頁">
+                                <span class="material-icons-outlined">last_page</span>
+                            </a>
+                        </li>
+                    </ul>
+                    <div class="page-skip">
+                        <select class="form-control" data-val="true" data-val-number="欄位 PageIndex 必須是數字。" data-val-required="PageIndex 欄位是必要項。" id="PageInfo_PageIndex" name="PageInfo.PageIndex" onchange="ChangePageIndex(this.value)" title="頁數"><option selected="selected" value="1">1</option>
+</select>
+                        <div class="page-text">
+                            <span>/</span>
+                            <span id="total-pageCount">1</span>
+                            <span>頁</span>
+                        </div>
+                    </div>
+                </nav>
+            </div>
+    </div>
+    <div id="detail"></div>
+    
+    
+    
+</main>
+<script>
+    $(document).ready(function () {
+        InitConditionTag();
+    });
+
+    function ChangePageIndex(_pageIndex) {
+        $(".loading").show();
+        var year = $("input[name='rblYear']:checked");
+        var type = $("input[name='rblType']:checked");
+        var typeId = $("input[name='rblType']:checked")[0].id;
+        var serializedModel = {"RegisterType":null,"IndexYear":null,"WestBeginYear":0,"WestEndYear":0,"YearDisplay":null,"SearchContent":"故帖000156","RegisterTypeEng":null,"PageInfo":{"PageIndex":1,"PageSize":500,"PageCount":1}};
+        serializedModel.PageInfo.PageIndex = _pageIndex;
+        serializedModel.YearDisplay = year.val();
+        serializedModel.RegisterType = type.val();
+        var serializedModelString = JSON.stringify(serializedModel);
+        $.ajax({
+            url: '/opendata/Pub/Search',
+            type: 'POST',
+            contentType: 'application/json',
+            data: serializedModelString,
+            success: function (response) {
+                document.open();
+                document.write(response);
+                document.close();
+                InitCategoryRadioReSearch(year.val(), type.val());
+                $(".loading").hide();
+            },
+            error: function (xhr, status, error) {
+                $(".loading").hide();
+                // 處理錯誤
+            }
+        });
+    }
+
+    function ChangePageSize(_page) {
+        $(".loading").show();
+        var year = $("input[name='rblYear']:checked");
+        var type = $("input[name='rblType']:checked");
+        var typeId = $("input[name='rblType']:checked")[0].id;
+        var _pageSize = _page.value;
+        var serializedModel = {"RegisterType":null,"IndexYear":null,"WestBeginYear":0,"WestEndYear":0,"YearDisplay":null,"SearchContent":"故帖000156","RegisterTypeEng":null,"PageInfo":{"PageIndex":1,"PageSize":500,"PageCount":1}};
+        serializedModel.PageInfo.PageSize = _pageSize;
+        serializedModel.YearDisplay = year.val();
+        serializedModel.RegisterType = type.val();
+        var serializedModelString = JSON.stringify(serializedModel);
+        $.ajax({
+            url: '/opendata/Pub/Search',
+            type: 'POST',
+            contentType: 'application/json',
+            data: serializedModelString,
+            success: function (response) {
+                document.open();
+                document.write(response);
+                document.close();
+                InitCategoryRadioReSearch(year.val(), type.val());
+                $(".loading").hide();
+            },
+            error: function (xhr, status, error) {
+                $(".loading").hide();
+                // 處理錯誤
+            }
+        });
+    }
+
+    function InitConditionTag() {
+        var serializedModel = {"RegisterType":null,"IndexYear":null,"WestBeginYear":0,"WestEndYear":0,"YearDisplay":null,"SearchContent":"故帖000156","RegisterTypeEng":null,"PageInfo":{"PageIndex":1,"PageSize":500,"PageCount":1}};
+        var serializedModelString = JSON.stringify(serializedModel);
+        $.ajax({
+            type: "Post",
+            url: '/opendata/Pub/InitConditionTag',
+            contentType: 'application/json',
+            data: serializedModelString,
+            success: function (res) {
+                $("#conditonTag").html(res);
+
+            },
+            error: function (xhr, ajaxOptions, thrownError) {
+            }
+        }).done(function () {
+        });
+    }
+
+    function ClickSearch() {
+        $(".loading").show();
+        var searchText = $("#txtQuery").val();
+        var year = $("input[name='rblYear']:checked");
+        var type = $("input[name='rblType']:checked");
+        var typeId = $("input[name='rblType']:checked")[0].id;
+        var serializedModel = {"RegisterType":null,"IndexYear":null,"WestBeginYear":0,"WestEndYear":0,"YearDisplay":null,"SearchContent":"故帖000156","RegisterTypeEng":null,"PageInfo":{"PageIndex":1,"PageSize":500,"PageCount":1}};
+        serializedModel.SearchContent = searchText;
+        serializedModel.YearDisplay = year.val();
+        serializedModel.RegisterType = type.val();
+        serializedModel.PageInfo.PageIndex = 1;
+
+        var serializedModelString = JSON.stringify(serializedModel);
+        $.ajax({
+            url: '/opendata/Pub/Search',
+            type: 'POST',
+            contentType: 'application/json',
+            data: serializedModelString,
+            success: function (response) {
+                document.open();
+                document.write(response);
+                document.close();
+                InitCategoryRadioReSearch(year.val(), type.val());
+                $(".loading").hide();
+            },
+            error: function (xhr, status, error) {
+                $(".loading").hide();
+            }
+        });
+    }
+    $('.card').on('click', function (event) {
+        event.preventDefault();
+    });
+    $('#ReturnToPage').on('click', function (event) {
+        event.preventDefault();
+    });
+
+    $('.card').on('click', function (event) {
+        event.preventDefault();
+    });
+
+    function Detail(_id, _dep) {
+        $(".loading").show();
+        var lastScrollPos = $(window).scrollTop();
+        // 可考慮存到 sessionStorage 以便跨頁面使用
+        sessionStorage.setItem("lastScrollPos", lastScrollPos);
+        $.ajax({
+            type: "Post",
+            url: '/opendata/Pub/Detail',
+            data: {
+                "id": parseInt(_id),
+                "dep": _dep,
+            },
+            success: function (res) {
+                $("#searchResult").hide();
+
+                $("#detail").html("");
+                $("#detail").html(res);
+                $("#detail").show();
+                $(".loading").hide();
+                //InitConditionTagDetail();
+            },
+            error: function (xhr, ajaxOptions, thrownError) {
+                $(".loading").hide();
+            }
+        }).done(function () {
+        });
+    }
+    function InitConditionTagDetail() {
+        $.ajax({
+            type: "Post",
+            url: '/opendata/Pub/InitConditionTagDetail',
+            success: function (res) {
+                $("#conditonTag").html(res);
+            },
+            error: function (xhr, ajaxOptions, thrownError) {
+            }
+        }).done(function () {
+        });
+    }
+
+    function CleanAll() {
+        $("#txtQuery").val("");
+        document.getElementById("rblYear_0").checked = true;
+        document.getElementById("rblType_0").checked = true;
+    }
+
+
+    function InitCategoryRadio(e) {
+        var type = $("input[name='rblType']:checked").val();
+        $.ajax({
+            type: "Post",
+            url: '/opendata/Pub/InitCategory',
+            data: {
+                "dynasty": e,
+                "category": type,
+            },
+            success: function (res) {
+                $("#rblType").html(res);
+
+            },
+            error: function (xhr, ajaxOptions, thrownError) {
+            }
+        }).done(function () {
+            //sessionStorage.removeItem("loading");
+        });
+    }
+
+    function InitCategoryRadioReSearch(e, type) {
+    $.ajax({
+        type: "Post",
+        url: '/opendata/Pub/InitCategory',
+        data: {
+            "dynasty": e,
+            "category": type,
+        },
+        success: function (res) {
+            $("#rblType").html(res);
+
+        },
+        error: function (xhr, ajaxOptions, thrownError) {
+        }
+    }).done(function () {
+        //sessionStorage.removeItem("loading");
+    });
+}
+
+    $('#txtQuery').keypress(function (event) {
+        if (event.which === 13) { // Enter key
+            event.preventDefault(); // 防止表單提交
+
+            ClickSearch();
+        }
+    });
+
+</script>
+
+        <!-- ↓ 頁尾 ↓ -->
+        <footer id="footer">
+            <div class="footer-top">
+                <a href="#B" id="B" name="B" accesskey="B" class="accesskey" title="頁尾網站資訊，包含聯絡資訊、網站資料開放宣告、隱私權宣告、資訊安全政策等訊息">:::</a>
+                <a href="https://www.npm.gov.tw/" target="_blank" rel="noopener noreferrer" class="logo2">
+                    <img src="/opendata/Content/images/LOGO7.svg" alt="國立故宮博物院LOGO" />
+                </a>
+                <div class="footer-details1">
+                    <a href="#" class="" data-bs-toggle="dropdown" aria-expanded="false" title="查看網站資料開放宣告">網站資料開放宣告</a>
+                    <div class="dropdown-menu">
+                        <div class="footer-head">網站資料開放宣告</div>
+                        <p>
+                            <span>開放院藏書畫類、器物類、織品類文物低階圖像（100萬畫素）計約41萬幅， 以</span><a class="primary" href="https://creativecommons.org/publicdomain/zero/1.0/deed.zh-hant" target="_blank" rel="noopener noreferrer">「公眾領域貢獻宣告」（CC0）規範</a><span> ，不須註明出處。</span>
+                        </p>
+                        <p>
+                            <span>開放院藏書畫類、器物類、織品類文物中階圖像（600萬畫素）計約41萬幅，中階圖檔及本網站文字均以</span><a class="primary" href="https://creativecommons.org/licenses/by/4.0/deed.zh-hant" target="_blank" rel="noopener noreferrer">「CC授權條款4.0」之CC BY 姓名標示規範</a><span>，無須申請、不限用途、不用付費即可公開使用，惟需於適當位置呈現中文或英文姓名標示（選擇一種表示型式），○○○○○為使用圖檔之品名。</span>
+                        </p>
+                        <p>
+                            中文表示型式：
+                        </p>
+                        <p>
+                            ○○○○○ 國立故宮博物院，臺北，CC BY 4.0 &#64; www.npm.gov.tw
+                        </p>
+                        <p>
+                            英文表示型式：
+                        </p>
+                        <p>
+                            ○○○○○ The National Palace Museum, Taipei, CC BY 4.0 &#64; www.npm.gov.tw
+                        </p>
+                        <p>
+                            上述文物低階、中階圖像，均無需申請、不限用途、不用付費，可直接下載，公開使用，但不包括專利權及商標權。惟使用者使用開放資料之圖檔自行製作製成品時，應避免使他人誤會為係本院所製作之製成品。
+                        </p>
+                    </div>
+                    <span>　·　</span>
+                    <a href="https://www.npm.gov.tw/Articles.aspx?sno=02000178&l=1" target="_blank" rel="noopener noreferrer" title="移至隱私權宣告[另開新視窗]">隱私權宣告</a>
+                    <span>　·　</span>
+                    <a href="https://www.npm.gov.tw/Articles.aspx?sno=02000179&l=1" target="_blank" rel="noopener noreferrer" title="移至資訊安全政策[另開新視窗]">資訊安全政策</a>
+                    <span>　·　</span>
+                    <a href="https://contactus.npm.gov.tw/Web/case-apply.jsp?l=1&TArea=1" target="_blank" rel="noopener noreferrer" title="移至意見回饋[另開新視窗]">意見回饋</a>
+
+                </div>
+                <div class="footer-details2">國立故宮博物院著作權所有 © 2024 NATIONAL PALACE MUSEUM. All Rights Reserved.</div>
+            </div>
+            <div class="footer-bottom">
+                <span>北院地址：111001臺北市士林區至善路二段221號 · 聯絡電話 : (02)2881-2021 南院地址：612008嘉義縣太保市故宮大道888號 · 聯絡電話：(05)3620-777</span>
+                <!--<a href="https://accessibility.moda.gov.tw/Applications/Detail?category=20221205103551" title="無障礙網站">
+        <img src="~/Content/images/無障礙標章AA.png" width="130" alt="通過AA無障礙網頁檢測" />
+    </a>-->
+            </div>
+        </footer>
+        <!-- 側邊浮動選單 -->
+        <div class="sidebar-bar">
+            <button class="sidebar-btn" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar-more" aria-expanded="false" aria-controls="sidebar-more" title="展開側邊浮動選單：字體縮放、分享、返回頂端">
+                <span class="material-icons-outlined"> more_vert </span>
+            </button>
+            <div class="sidebar-more collapse" id="sidebar-more">
+                <button id="font-up" class="sidebar-btn" title="字體放大">
+                    <span class="sidebar-title">字體放大</span>
+                    <div class="material-icons-outlined">text_increase</div>
+                </button>
+                <button id="font-down" class="sidebar-btn" title="字體縮小">
+                    <span class="sidebar-title">字體縮小</span>
+                    <div class="material-icons-outlined">text_decrease</div>
+                </button>
+                <div class="sidebar-btn sidebar-share" role="button" tabindex="-1">
+                    <span class="sidebar-title">分享</span>
+                    <a class="sidebar-line" href="javascript: void(window.open('https://line.me/R/msg/text/?'.concat(encodeURIComponent(location.href)) ));"  title="分享到LINE">
+                        <span class="sr-only">LINE</span>
+                    </a>
+                    <a class="sidebar-facebook" href="javascript: void(window.open('https://www.facebook.com/sharer/sharer.php?u='+encodeURIComponent(location.href)));" title="分享到facebook">
+                        <span class="sr-only">facebook</span>
+                    </a>
+                    <a class="sidebar-twitter" href="javascript: void(window.open('http://twitter.com/share?url='+encodeURIComponent(location.href)));" title="分享到 X (twitter)">
+                        <span class="sr-only">twitter</span>
+                    </a>
+                    <div class="material-icons-outlined">share</div>
+                </div>
+                <a href="#" id="return-to-top" class="sidebar-btn" title="返回頂端">
+                    <span class="sidebar-title">返回頂端</span>
+                    <div class="material-icons-outlined">keyboard_tab</div>
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

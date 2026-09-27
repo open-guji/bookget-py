@@ -76,6 +76,14 @@ items:
     min_images: 1
     title_contains: "宋史"
 
+  - site_id: npm_taipei
+    url: "https://digitalarchive.npm.gov.tw/opendata/Pub/Detail?id=1528&dep=P&mode=full"
+    kind: images
+    min_images: 12
+    title_contains: "四庫全書簡明目錄"
+
+  # album mode is exercised by tests/test_npm_taipei.py::test_live_album (marked live)
+
   - site_id: loc
     url: "https://www.loc.gov/item/2006457689/"
     kind: images
