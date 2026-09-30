@@ -663,6 +663,10 @@ def cmd_selftest(args) -> int:
           required=False)
     check("internetarchive (upload)",
           lambda: __import__("internetarchive") and "available", required=False)
+    # `bookget pdf` still builds without PyMuPDF but skips the post-build
+    # verification (byte-identical images, no blank pages) — surface it.
+    check("pymupdf (pdf verify)",
+          lambda: __import__("pymupdf") and "available", required=False)
 
     print()
     print("RESULT:", "PASS" if ok else "FAIL")

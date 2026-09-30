@@ -167,7 +167,7 @@ def build_book_pdf(book_dir, out_path=None, *, engine: str = "native", sheet: bo
     if verify:
         res = verify_pdf(out_path, [book_dir / p["file"] for p in m["pages"]])
         if res is None:
-            logger.info("PyMuPDF not installed; skipping verification (pip install bookget[pdf])")
+            logger.warning("PyMuPDF not installed; skipping verification (pip install bookget[pdf])")
         elif not res[0]:
             raise RuntimeError(f"verification failed for {out_path.name}: {res[1]}")
         else:
