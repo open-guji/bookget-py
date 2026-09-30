@@ -48,6 +48,10 @@ browser = [
 tiles = [
     "Pillow>=10.0",  # stitching Zoomify/DeepZoom tiled images (e.g. TNM)
 ]
+pdf = [
+    "Pillow>=10.0",  # `bookget pdf` metadata sheet (the JPEG-embedding writer itself needs nothing)
+    "pymupdf>=1.24", # post-build verification (images byte-identical, no blank pages)
+]
 ia = [
     "internetarchive>=4.0",  # `bookget upload` / `ia-patch` / `ia-check`
 ]

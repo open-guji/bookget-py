@@ -29,13 +29,14 @@ bookget/
 │   ├── base.py              # BaseSiteAdapter 抽象基类
 │   ├── registry.py          # 适配器自动发现与注册
 │   ├── iiif/                # IIIF 站点: Harvard, NDL, Princeton, Stanford, Berkeley
-│   └── other/               # 独立站点: NLC Guji, NLC Read（读者云门户）, CText, Shidianguji, Hanchi, Wikisource, Archive.org, BnF, BL, BSB, 台湾NCL/NPM
+│   └── other/               # 独立站点: NLC Guji, NLC Read（读者云门户）, CText, Shidianguji, Hanchi, Wikisource, Archive.org, BnF, BL, BSB, 台湾NCL/NPM(故宮 Open Data)
 ├── downloaders/             # 下载器 (ImageDownloader, IIIFImageDownloader, TextDownloader)
 ├── storage/
 │   └── file_storage.py      # 文件存储管理，目录结构规范
 ├── text_parsers/            # 文本解析器 (CText, Shidianguji, Wikisource)
 │   └── base.py              # StructuredText 结构化文本模型
 ├── text_converters/         # Markdown / PlainText 转换器
+├── pdf/                     # 归档 PDF 合成 (`bookget pdf`): schema.py 文档描述 → writer.py 纯 Python / latex.py LuaLaTeX 两种引擎，verify.py PyMuPDF 校验
 └── scripts/
     └── siku_catalog_parser.py  # 四库全书目录解析辅助脚本
 ```

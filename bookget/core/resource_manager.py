@@ -43,7 +43,8 @@ class ResourceManager:
         include_text: bool = True,
         include_metadata: bool = True,
         index_id: str = "",
-        progress_callback: Callable[[int, int], None] = None
+        progress_callback: Callable[[int, int], None] = None,
+        adapter_options: dict = None,
     ) -> DownloadTask:
         """
         Download all resources from a URL.
@@ -63,6 +64,13 @@ class ResourceManager:
         adapter = get_adapter(url, self.config)
         if not adapter:
             raise AdapterNotFoundError(url)
+        # Per-run adapter switches (e.g. NPM album_mode); unknown ones are ignored
+        # by adapters that do not define them.
+        for key, value in (adapter_options or {}).items():
+            if hasattr(type(adapter), key):
+                setattr(adapter, key, value)
+            else:
+                logger.warning(f"{adapter.site_id}: option {key!r} not supported, ignored")
 
         try:
             # Extract book ID
@@ -94,6 +102,13 @@ class ResourceManager:
                 with open(metadata_path, "w", encoding="utf-8") as f:
                     json.dump(task.metadata.to_dict(), f, ensure_ascii=False, indent=2)
                 logger.info(f"Saved metadata to: {metadata_path}")
+                # Adapters that opt in keep their full source record next to
+                # metadata.json (BookMetadata.to_dict() drops raw_metadata),
+                # so `bookget pdf` can build the metadata sheet offline.
+                if getattr(adapter, "persist_raw_metadata", False) and task.metadata.raw_metadata:
+                    raw_path = dest_dir / f"raw.{adapter.site_id}.json"
+                    with open(raw_path, "w", encoding="utf-8") as f:
+                        json.dump(task.metadata.raw_metadata, f, ensure_ascii=False, indent=2)
 
             # Get and download images
             if include_images:

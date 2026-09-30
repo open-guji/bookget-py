@@ -59,13 +59,20 @@ bookget/
 │       ├── hanchi.py
 │       ├── nlc_guji.py
 │       ├── shidianguji.py   #   使用 Playwright 浏览器自动化
-│       ├── taiwan.py        #   NCL + NPM
+│       ├── taiwan.py        #   NCL + NPM 故宮 Open Data (IIIF; persist_raw_metadata → raw.npm_taipei.json)
 │       └── wikisource.py
 ├── downloaders/             # 下载器
 │   ├── base.py              #   ImageDownloader, TextDownloader
 │   └── iiif.py              #   IIIFImageDownloader
 ├── storage/
 │   └── file_storage.py      # 文件存储，目录结构管理
+├── pdf/                     # `bookget pdf` 归档 PDF
+│   ├── schema.py            #   文档描述（NPM 单记录 / NPM 整件作品 / 通用），两种引擎共用
+│   ├── writer.py            #   无依赖 PDF 写入器：JPEG 原样嵌入、Info/XMP、书签、页标签、附件
+│   ├── sheet.py             #   Pillow 栅格化资料表（native 引擎）
+│   ├── latex.py             #   LuaLaTeX 引擎（排版资料表，需 TeX Live）
+│   ├── verify.py            #   PyMuPDF 校验（图片逐字节一致、无空白页）
+│   └── build.py             #   组装入口 build_book_pdf(engine=native|latex)
 ├── text_parsers/            # 网页→结构化文本
 │   ├── base.py              #   StructuredText 数据模型
 │   ├── ctext_parser.py
