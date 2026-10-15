@@ -284,6 +284,10 @@ python packaging/build.py ui    # 只构建 bookget-ui（会自动构建前端�
 
 构建产物在 `dist/` 目录下。
 
+## 附带数据
+
+- [`data/续修四库全书/`](data/续修四库全书/)：《續修四庫全書》总目录解析结果（5,580 条 JSON/CSV）与解析脚本；来源与著作权说明见其 README（源 PDF/txt 不在本仓）。
+
 ## 许可证
 
 [Apache License 2.0](LICENSE)
